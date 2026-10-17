@@ -1,0 +1,15 @@
+# Flatpak build artefacts
+.flatpak-builder/
+build/
+repo/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Editor
+.vscode/
+*.swp
+
+# The upstream snap source (submodule or clone, not part of this packaging repo)
+myna/

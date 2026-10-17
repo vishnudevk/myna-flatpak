@@ -1,0 +1,44 @@
+#!/bin/sh
+# parakeet-server (Flatpak): launch myna-server with the active Parakeet engine.
+# Mirrors whisper-server; see that script for the detailed translation notes.
+set -eu
+
+VENV=/app/lib/myna-parakeet/venv
+ENGINES_DIR=/app/lib/myna-parakeet/engines
+EXTENSIONS_DIR=/app/extensions
+BACKEND_DIR="${XDG_RUNTIME_DIR}/myna"
+SOCKET="${BACKEND_DIR}/parakeet.sock"
+
+mkdir -p "$BACKEND_DIR"
+
+ENGINE="${MYNA_PARAKEET_ENGINE:-cpu}"
+
+# Resolve model weights from the appropriate extension.
+if [ "$ENGINE" = "nvidia-gpu" ]; then
+    MODEL_DIR="$EXTENSIONS_DIR/models/parakeet-fp32"
+else
+    MODEL_DIR="$EXTENSIONS_DIR/models/parakeet-int8"
+fi
+
+if [ ! -d "$MODEL_DIR" ]; then
+    echo "myna-parakeet: model extension not installed: $MODEL_DIR" >&2
+    exit 1
+fi
+
+write-provider-env "$SOCKET" "$BACKEND_DIR/parakeet.env"
+
+export VIRTUAL_ENV="$VENV"
+export PATH="$VENV/bin:$PATH"
+
+if [ "$ENGINE" = "nvidia-gpu" ]; then
+    CUDA_SITE="$EXTENSIONS_DIR/gpu-nvidia/site-packages"
+    export PYTHONPATH="$CUDA_SITE${PYTHONPATH:+:$PYTHONPATH}"
+    export LD_LIBRARY_PATH="$CUDA_SITE/nvidia/cu13/lib:$CUDA_SITE/nvidia/cudnn/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+fi
+
+exec "$VENV/bin/python3" -m myna.server \
+    --adapter parakeet \
+    --streaming \
+    --engine "$ENGINE" \
+    --model-dir "$MODEL_DIR" \
+    --socket "$SOCKET"

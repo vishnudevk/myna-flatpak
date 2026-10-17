@@ -1,0 +1,68 @@
+id: com.canonical.Myna.Parakeet
+runtime: org.gnome.Platform
+runtime-version: '47'
+sdk: org.gnome.Sdk
+command: myna-parakeet-server
+
+# ─── Permissions ───────────────────────────────────────────────────────────
+# Same policy as the Whisper backend: no audio hardware access.
+finish-args:
+  - --socket=session-bus
+  - --filesystem=xdg-run/myna:create
+  # /sys + /proc for ONNX Runtime CPU topology / cgroup quota
+  - --device=all
+
+build-options:
+  env:
+    PIP_TIMEOUT: '60'
+    PIP_RETRIES: '10'
+
+modules:
+  # ─────────────────────────────────────────────────────────────────────────
+  # Python venv: myna[parakeet] + onnxruntime-cpu
+  # GPU (CUDA) support ships as the gpu-nvidia extension.
+  # ─────────────────────────────────────────────────────────────────────────
+  - name: myna-parakeet
+    buildsystem: simple
+    build-commands:
+      - python3 -m venv /app/lib/myna-parakeet/venv
+      - /app/lib/myna-parakeet/venv/bin/pip install
+          --no-index --find-links=./wheels
+          './wheels/myna-0.0.0-py3-none-any.whl[parakeet]'
+      - rm -f /app/lib/myna-parakeet/venv/bin/pip*
+          /app/lib/myna-parakeet/venv/bin/onnxruntime_test
+      - cp -r engines  /app/lib/myna-parakeet/engines
+      - cp -r runtimes /app/lib/myna-parakeet/runtimes
+      - cp -r models   /app/lib/myna-parakeet/models
+      - install -Dm755 packaging/flatpak/scripts/parakeet-server /app/bin/myna-parakeet-server
+      - install -Dm755 packaging/flatpak/scripts/write-provider-env /app/bin/write-provider-env
+      - install -Dm644 packaging/flatpak/services/com.canonical.Myna.Parakeet.service
+          /app/share/systemd/user/com.canonical.Myna.Parakeet.service
+
+    sources:
+      - type: git
+        url: https://github.com/canonical/myna.git
+        branch: main
+        dest: .
+      - type: dir
+        path: .
+        dest: packaging/flatpak
+      - type: dir
+        path: wheels
+        dest: wheels
+
+add-extensions:
+  com.canonical.Myna.Parakeet.Model.Int8:
+    directory: extensions/models/parakeet-int8
+    autodelete: true
+    no-autodownload: false   # default: int8 CPU model
+
+  com.canonical.Myna.Parakeet.Model.Fp32:
+    directory: extensions/models/parakeet-fp32
+    autodelete: true
+    no-autodownload: true    # GPU-only model, don't download by default
+
+  com.canonical.Myna.Parakeet.GpuNvidia:
+    directory: extensions/gpu-nvidia
+    autodelete: true
+    no-autodownload: true

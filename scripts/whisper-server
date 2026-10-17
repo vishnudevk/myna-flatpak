@@ -1,0 +1,67 @@
+#!/bin/sh
+# whisper-server (Flatpak): launch myna-server with the active Whisper engine.
+#
+# Adaptation of whisper-snap/scripts/server.sh for Flatpak.
+#
+# Snap → Flatpak translation:
+#   $SNAP/engines/         → /app/lib/myna-whisper/engines/
+#   $SNAP/lib/python3.*/   → /app/lib/myna-whisper/venv/
+#   provider.env location  → $XDG_RUNTIME_DIR/myna/  (shared with client)
+#
+# Engine selection: we read the active engine from a config file rather than
+# modelctl (modelctl is a snap-specific CLI; for Flatpak we provide a simpler
+# selection mechanism via myna-config / GSettings or a plain text file).
+#
+# The socket is written to $XDG_RUNTIME_DIR/myna/whisper.sock and a
+# provider.env beside it tells the client snap/flatpak what socket to use.
+set -eu
+
+VENV=/app/lib/myna-whisper/venv
+ENGINES_DIR=/app/lib/myna-whisper/engines
+MODELS_DIR=/app/lib/myna-whisper/models
+EXTENSIONS_DIR=/app/extensions
+BACKEND_DIR="${XDG_RUNTIME_DIR}/myna"
+SOCKET="${BACKEND_DIR}/whisper.sock"
+
+mkdir -p "$BACKEND_DIR"
+
+# Determine the active engine (cpu is the default; override via
+# MYNA_WHISPER_ENGINE env var or a future myna-config key).
+ENGINE="${MYNA_WHISPER_ENGINE:-cpu}"
+
+# Determine the active model (from MYNA_WHISPER_MODEL or the engine default).
+if [ -z "${MYNA_WHISPER_MODEL:-}" ]; then
+    # Read the default model from the engine manifest
+    MODEL=$(grep 'default:' "$ENGINES_DIR/$ENGINE/engine.yaml" | awk '{print $2}')
+else
+    MODEL="$MYNA_WHISPER_MODEL"
+fi
+
+# Resolve model weights directory.
+# Model weights ship as Flatpak extensions mounted at $EXTENSIONS_DIR/models/<size>/.
+MODEL_DIR="$EXTENSIONS_DIR/models/$MODEL"
+if [ ! -d "$MODEL_DIR" ]; then
+    echo "myna-whisper: model extension not installed: $MODEL_DIR" >&2
+    echo "Install it with: flatpak install com.canonical.Myna.Whisper.Model.$(echo "$MODEL" | sed 's/./\u&/')" >&2
+    exit 1
+fi
+
+# Write provider.env so the client knows where to connect.
+# Format matches what myna-server --share-provider writes in the snap.
+write-provider-env "$SOCKET" "$BACKEND_DIR/whisper.env"
+
+# Activate the venv and launch myna-server.
+export VIRTUAL_ENV="$VENV"
+export PATH="$VENV/bin:$PATH"
+# For the nvidia-gpu engine, prepend the CUDA extension's site-packages.
+if [ "$ENGINE" = "nvidia-gpu" ]; then
+    CUDA_SITE="$EXTENSIONS_DIR/gpu-nvidia/site-packages"
+    export PYTHONPATH="$CUDA_SITE${PYTHONPATH:+:$PYTHONPATH}"
+    export LD_LIBRARY_PATH="$CUDA_SITE/nvidia/cu13/lib:$CUDA_SITE/nvidia/cudnn/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+fi
+
+exec "$VENV/bin/python3" -m myna.server \
+    --adapter whisper \
+    --engine "$ENGINE" \
+    --model-dir "$MODEL_DIR" \
+    --socket "$SOCKET"

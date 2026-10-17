@@ -1,0 +1,15 @@
+[Unit]
+Description=Myna Parakeet inference backend
+Documentation=https://github.com/canonical/myna
+After=dbus.socket
+Wants=dbus.socket
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/flatpak run --command=myna-parakeet-server com.canonical.Myna.Parakeet
+Restart=on-failure
+RestartSec=1s
+# Environment=MYNA_PARAKEET_ENGINE=nvidia-gpu
+
+[Install]
+WantedBy=default.target

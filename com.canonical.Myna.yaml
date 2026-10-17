@@ -1,0 +1,123 @@
+id: com.canonical.Myna
+runtime: org.gnome.Platform
+runtime-version: '47'
+sdk: org.gnome.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+command: myna-daemon
+
+# --- Permissions ---
+# Only the client snap has microphone/audio and desktop access.
+# The inference backend gets no audio hardware whatsoever (matches the snap model).
+finish-args:
+  # Wayland / X11 display (needed by myna-hud GTK4 window)
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  # PipeWire for microphone capture - accessed via portal
+  - --device=all
+  # IBus text injection (desktop-legacy equivalent)
+  - --socket=session-bus
+  # Allow reading/writing GSettings (dconf) for host keybinding integration
+  - --filesystem=xdg-config/dconf:ro
+  # Shared IPC dir so backend snaps / Flatpak backends can drop their socket
+  - --filesystem=xdg-run/myna:create
+  # Access to home for myna-testbed WAV clip reading
+  - --filesystem=home
+
+build-options:
+  append-path: /usr/lib/sdk/rust-stable/bin
+  env:
+    CARGO_HOME: /run/build/myna/cargo
+    RUST_BACKTRACE: '1'
+
+modules:
+  # ─────────────────────────────────────────────────────────────────────────
+  # libpipewire (PipeWire client library + minimal SPA plugins)
+  # The GNOME runtime ships PipeWire; we pin the same version the snap uses
+  # (noble = 1.0.x). If the runtime already provides a compatible version,
+  # this module can be dropped and the finish-args socket=wayland covers pw.
+  # ─────────────────────────────────────────────────────────────────────────
+  - name: pipewire
+    buildsystem: meson
+    config-opts:
+      - -Daudiomixer=disabled
+      - -Daudioconvert=disabled
+      - -Davahi=disabled
+      - -Dbluez5=disabled
+      - -Djack=disabled
+      - -Dpulseaudio=disabled
+      - -Dvulkan=disabled
+      - -Dgstreamer=disabled
+      - -Dexamples=disabled
+      - -Dtests=disabled
+      - -Dsession-managers=[]
+    sources:
+      - type: git
+        url: https://gitlab.freedesktop.org/pipewire/pipewire.git
+        tag: '1.0.5'
+        commit: 0e6d91e4d8ebc2c28cf3e7aa1a1c71d77a2b13a9
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Myna Rust client workspace
+  # Builds: myna-desktop (daemon + toggle), myna-hud, myna-testbed, myna-cli
+  # Source is a git submodule pointing at the upstream myna repo.
+  # ─────────────────────────────────────────────────────────────────────────
+  - name: myna
+    buildsystem: simple
+    build-options:
+      env:
+        # Point the staged libpipewire SPA plugins at the Flatpak install prefix
+        SPA_PLUGIN_DIR: /app/lib/spa-0.2
+        PIPEWIRE_MODULE_DIR: /app/lib/pipewire-0.3
+    build-commands:
+      # Install the pinned Rust toolchain declared in rust-toolchain.toml
+      - |
+        channel=$(sed -n 's/^channel = "\(.*\)"$/\1/p' client/rust-toolchain.toml)
+        rustup set profile minimal
+        rustup default "$channel"
+      # Build the three shipped binaries
+      - cargo install -f --locked --path client/myna-desktop --root /app
+      - cargo install -f --locked --path client/myna-cli     --root /app
+      - cargo install -f --locked --path client/myna-hud     --root /app
+      - rm -f /app/.crates.toml /app/.crates2.json
+      # Strip DWARF (debug info) to shrink the install; keep the symbol table
+      # so panic backtraces remain readable, matching the snap's strip-debug.
+      - strip --strip-debug /app/bin/myna-desktop /app/bin/myna-testbed /app/bin/myna-hud
+      # GSettings schema
+      - install -Dm644
+          client/data/glib-2.0/schemas/com.canonical.Myna.Dictation.gschema.xml
+          /app/share/glib-2.0/schemas/com.canonical.Myna.Dictation.gschema.xml
+      - glib-compile-schemas /app/share/glib-2.0/schemas
+      # Gettext translations (both domains)
+      - |
+        for po in client/myna-desktop/po/*.po client/myna-orchestrator/po/*.po; do
+          lang=$(basename "$po" .po)
+          domain=$(basename "$(dirname "$(dirname "$po")")")
+          mkdir -p "/app/share/locale/$lang/LC_MESSAGES"
+          msgfmt "$po" -o "/app/share/locale/$lang/LC_MESSAGES/$domain.mo"
+        done
+      # Launcher scripts (adapted from snap/scripts/)
+      - install -Dm755 packaging/flatpak/scripts/myna-daemon         /app/bin/myna-daemon
+      - install -Dm755 packaging/flatpak/scripts/myna-config         /app/bin/myna-config
+      - install -Dm755 packaging/flatpak/scripts/myna-status         /app/bin/myna-status
+      - install -Dm755 packaging/flatpak/scripts/myna-testbed-wrapper /app/bin/myna-testbed-wrapper
+      # Desktop entry + appstream metainfo
+      - install -Dm644 packaging/flatpak/com.canonical.Myna.desktop
+          /app/share/applications/com.canonical.Myna.desktop
+      - install -Dm644 packaging/flatpak/com.canonical.Myna.metainfo.xml
+          /app/share/metainfo/com.canonical.Myna.metainfo.xml
+
+    build-options:
+      build-args:
+        - --share=network
+    sources:
+      # The upstream Myna source
+      - type: git
+        url: https://github.com/canonical/myna.git
+        branch: main
+        dest: .
+      # Flatpak-specific packaging (this repo lives beside the upstream source)
+      - type: dir
+        path: .
+        dest: packaging/flatpak

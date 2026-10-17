@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.canonical.Myna</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>AGPL-3.0-or-later</project_license>
+  <name>Myna</name>
+  <summary>Local, offline speech-to-text for the desktop</summary>
+  <description>
+    <p>
+      Myna provides local, offline speech-to-text for the Linux desktop.
+      Activate dictation with a hotkey, speak, and the transcript is typed
+      into the focused application via IBus. Audio is captured by this app;
+      the inference backends have no microphone access. Nothing leaves the
+      machine and no audio is persisted.
+    </p>
+    <p>
+      Requires a backend Flatpak to be installed and running:
+    </p>
+    <ul>
+      <li>com.canonical.Myna.Whisper — Whisper (faster-whisper / CTranslate2)</li>
+      <li>com.canonical.Myna.Parakeet — Parakeet TDT 0.6B v3 (onnxruntime)</li>
+    </ul>
+  </description>
+  <url type="homepage">https://github.com/canonical/myna</url>
+  <url type="bugtracker">https://github.com/canonical/myna/issues</url>
+  <developer_name>Canonical Ltd</developer_name>
+  <content_rating type="oars-1.1" />
+  <releases>
+    <release version="0.0.0" date="2026-01-01">
+      <description>
+        <p>Initial Flatpak packaging of Myna.</p>
+      </description>
+    </release>
+  </releases>
+  <categories>
+    <category>Utility</category>
+    <category>Accessibility</category>
+  </categories>
+  <keywords>
+    <keyword>speech</keyword>
+    <keyword>dictation</keyword>
+    <keyword>transcription</keyword>
+    <keyword>accessibility</keyword>
+    <keyword>voice</keyword>
+  </keywords>
+</component>

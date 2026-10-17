@@ -1,0 +1,17 @@
+#!/bin/sh
+# myna-config (Flatpak): query/change persisted GSettings via gsettings CLI.
+# Adapted from myna-snap/scripts/myna-config.
+#
+# In Flatpak, GSETTINGS_BACKEND=keyfile is not needed here because myna-desktop
+# sets it in its own environment (com.canonical.Myna.Dictation schema is
+# compiled into /app/share/glib-2.0/schemas/).  The keyfile store is written
+# to $XDG_CONFIG_HOME (Flatpak-sandboxed to ~/.var/app/com.canonical.Myna/config).
+set -eu
+SCHEMA=com.canonical.Myna.Dictation
+case "${1:-}" in
+    "") exec gsettings list-recursively "$SCHEMA" ;;
+    get | set | reset | reset-recursively | range | describe \
+    | list-keys | list-children | list-recursively | monitor | writable)
+        verb=$1; shift; exec gsettings "$verb" "$SCHEMA" "$@" ;;
+    *) exec gsettings "$@" ;;
+esac

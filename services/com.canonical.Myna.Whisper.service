@@ -1,0 +1,17 @@
+[Unit]
+Description=Myna Whisper inference backend
+Documentation=https://github.com/canonical/myna
+After=dbus.socket
+Wants=dbus.socket
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/flatpak run --command=myna-whisper-server com.canonical.Myna.Whisper
+Restart=on-failure
+RestartSec=1s
+# Pass engine/model overrides via environment if desired:
+# Environment=MYNA_WHISPER_ENGINE=nvidia-gpu
+# Environment=MYNA_WHISPER_MODEL=large-v3-turbo
+
+[Install]
+WantedBy=default.target

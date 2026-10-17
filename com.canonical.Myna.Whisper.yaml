@@ -1,0 +1,111 @@
+id: com.canonical.Myna.Whisper
+runtime: org.gnome.Platform
+runtime-version: '47'
+sdk: org.gnome.Sdk
+# No command: this is a background service, not a GUI app.
+# It is launched by a systemd user service (see packaging/flatpak/services/).
+command: myna-whisper-server
+
+# ─── Permissions ───────────────────────────────────────────────────────────
+# The inference backend has NO microphone access (matches the snap model).
+# Audio arrives as PCM pushed over the shared Unix socket by the client.
+finish-args:
+  # Session bus for activation / health signalling
+  - --socket=session-bus
+  # The shared socket directory: same path the client uses
+  - --filesystem=xdg-run/myna:create
+  # /sys and /proc reads for ONNX Runtime CPU topology and cgroup quota
+  # (hardware-observe + system-observe equivalent)
+  - --device=all
+  # No network: model weights ship inside the Flatpak extension volumes
+
+build-options:
+  env:
+    PIP_TIMEOUT: '60'
+    PIP_RETRIES: '10'
+
+modules:
+  # ─────────────────────────────────────────────────────────────────────────
+  # Python venv: myna[whisper] + faster-whisper (CTranslate2, CPU)
+  # GPU (CUDA) support ships as a separate Flatpak extension (see below).
+  # ─────────────────────────────────────────────────────────────────────────
+  - name: myna-whisper
+    buildsystem: simple
+    build-commands:
+      # Create a venv under /app/lib/myna-whisper/
+      - python3 -m venv /app/lib/myna-whisper/venv
+      # Install myna with the whisper extra (faster-whisper + CTranslate2)
+      - /app/lib/myna-whisper/venv/bin/pip install
+          --no-index --find-links=./wheels
+          './wheels/myna-0.0.0-py3-none-any.whl[whisper]'
+      # Remove pip (not needed at runtime) and build-only bits
+      - rm -f /app/lib/myna-whisper/venv/bin/pip*
+          /app/lib/myna-whisper/venv/bin/onnxruntime_test
+      # Install engine/runtime/model manifests (used by the launcher)
+      - cp -r engines  /app/lib/myna-whisper/engines
+      - cp -r runtimes /app/lib/myna-whisper/runtimes
+      - cp -r models   /app/lib/myna-whisper/models
+      # Launcher script
+      - install -Dm755 packaging/flatpak/scripts/whisper-server /app/bin/myna-whisper-server
+      # Provider-env writer (tells the client where the socket is)
+      - install -Dm755 packaging/flatpak/scripts/write-provider-env /app/bin/write-provider-env
+      # Systemd user service unit
+      - install -Dm644 packaging/flatpak/services/com.canonical.Myna.Whisper.service
+          /app/share/systemd/user/com.canonical.Myna.Whisper.service
+
+    sources:
+      - type: git
+        url: https://github.com/canonical/myna.git
+        branch: main
+        dest: .
+      - type: dir
+        path: .
+        dest: packaging/flatpak
+      # Pre-built wheels for faster-whisper + CTranslate2 (CPU only).
+      # Generated with: pip download myna[whisper] -d wheels/
+      - type: dir
+        path: wheels
+        dest: wheels
+
+# ─── Flatpak Extensions ────────────────────────────────────────────────────
+# Model weights ship as Flatpak extensions (analogous to snap components).
+# Each extension is an independent Flatpak that contributes a read-only
+# mount at /app/extensions/models/<size>/ at runtime.
+#
+# NVIDIA GPU runtime ships as a separate extension (gpu-nvidia).
+add-extensions:
+  com.canonical.Myna.Whisper.Model.Tiny:
+    directory: extensions/models/tiny
+    autodelete: true
+    no-autodownload: true
+    subdirectories: false
+
+  com.canonical.Myna.Whisper.Model.Base:
+    directory: extensions/models/base
+    autodelete: true
+    no-autodownload: false    # default model, download automatically
+    subdirectories: false
+
+  com.canonical.Myna.Whisper.Model.Small:
+    directory: extensions/models/small
+    autodelete: true
+    no-autodownload: true
+    subdirectories: false
+
+  com.canonical.Myna.Whisper.Model.LargeV3:
+    directory: extensions/models/large-v3
+    autodelete: true
+    no-autodownload: true
+    subdirectories: false
+
+  com.canonical.Myna.Whisper.Model.LargeV3Turbo:
+    directory: extensions/models/large-v3-turbo
+    autodelete: true
+    no-autodownload: true
+    subdirectories: false
+
+  com.canonical.Myna.Whisper.GpuNvidia:
+    directory: extensions/gpu-nvidia
+    autodelete: true
+    no-autodownload: true
+    subdirectories: false
