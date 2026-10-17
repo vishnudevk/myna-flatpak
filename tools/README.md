@@ -36,3 +36,22 @@ git commit -m "cargo: regenerate sources from Cargo.lock"
 If you update myna (e.g. `git -C myna pull`), regenerate and commit.
 A CI check comparing the lock file date to the sources file date is a
 good guard against drift.
+
+## flatpak-pip-generator.py
+
+Downloaded from [flatpak-builder-tools](https://github.com/flatpak/flatpak-builder-tools/tree/master/pip).
+
+Reads a `requirements.txt` and emits a JSON module manifest (`python3-requirements-whisper.json`)
+where each Python dependency is pinned by URL and SHA256 checksum, preferring
+pre-compiled wheels.
+
+### Usage
+
+```sh
+python3 tools/flatpak-pip-generator.py \
+    --runtime org.gnome.Sdk//50 \
+    --prefer-wheels=ctranslate2,onnxruntime,numpy,av,tokenizers,protobuf,pyyaml,hf-xet \
+    -r requirements-whisper.txt \
+    -o python3-requirements-whisper.json
+```
+

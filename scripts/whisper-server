@@ -1,9 +1,7 @@
 #!/bin/sh
-# whisper-server (Flatpak): launch myna-server with the active Whisper engine.
+# whisper-server (Flatpak): launch myna-server with the Whisper adapter.
 #
-# Adaptation of whisper-snap/scripts/server.sh for Flatpak.
-#
-# Layout:
+# Socket & discovery layout:
 #   $XDG_RUNTIME_DIR/myna/whisper/provider.env
 #   $XDG_RUNTIME_DIR/myna/whisper/myna.sock
 #
@@ -11,48 +9,56 @@
 # parses provider.env (SNAP_NAME + UNIX_SOCKET) and connects to myna.sock.
 set -eu
 
-VENV=/app/lib/myna-whisper/venv
-ENGINES_DIR=/app/lib/myna-whisper/engines
-MODELS_DIR=/app/lib/myna-whisper/models
 EXTENSIONS_DIR=/app/extensions
 SHARE_DIR="${XDG_RUNTIME_DIR}/myna/whisper"
 SOCKET="${SHARE_DIR}/myna.sock"
 
 mkdir -p "$SHARE_DIR"
 
-# Determine the active engine (cpu is the default; override via
-# MYNA_WHISPER_ENGINE env var).
-ENGINE="${MYNA_WHISPER_ENGINE:-cpu}"
+# Device selection: cpu (default) or cuda
+DEVICE="${MYNA_WHISPER_DEVICE:-cpu}"
 
-# Determine the active model (from MYNA_WHISPER_MODEL or the engine default).
-if [ -z "${MYNA_WHISPER_MODEL:-}" ]; then
-    MODEL=$(grep 'default:' "$ENGINES_DIR/$ENGINE/engine.yaml" | awk '{print $2}')
-else
-    MODEL="$MYNA_WHISPER_MODEL"
-fi
+# Model selection: tiny, base, small, large-v3, large-v3-turbo (default: base)
+MODEL="${MYNA_WHISPER_MODEL:-base}"
 
 # Resolve model weights directory.
-MODEL_DIR="$EXTENSIONS_DIR/models/$MODEL"
-if [ ! -d "$MODEL_DIR" ]; then
-    echo "myna-whisper: model extension not installed: $MODEL_DIR" >&2
-    echo "Install it with: flatpak install com.canonical.Myna.Whisper.Model.$(echo "$MODEL" | sed 's/./\u&/')" >&2
+# Checks user data directory first, then Flatpak extension directory.
+USER_DATA_DIR="${XDG_DATA_HOME:-$HOME/.var/app/com.canonical.Myna.Whisper/data}/myna/models/$MODEL"
+EXT_DATA_DIR="$EXTENSIONS_DIR/models/$MODEL"
+
+if [ -d "$USER_DATA_DIR" ]; then
+    MODEL_DIR="$USER_DATA_DIR"
+elif [ -d "$EXT_DATA_DIR" ]; then
+    MODEL_DIR="$EXT_DATA_DIR"
+else
+    echo "myna-whisper: model '$MODEL' weights not found." >&2
+    echo "Looked in:" >&2
+    echo "  1. $USER_DATA_DIR" >&2
+    echo "  2. $EXT_DATA_DIR" >&2
+    echo "" >&2
+    echo "To install as a Flatpak extension:" >&2
+    echo "  flatpak install com.canonical.Myna.Whisper.Model.$(echo "$MODEL" | sed 's/./\u&/')" >&2
+    echo "Or place the CTranslate2 model files into:" >&2
+    echo "  $USER_DATA_DIR" >&2
     exit 1
 fi
 
-# Write provider.env beside the socket.
-write-provider-env "$SOCKET" "$SHARE_DIR/provider.env" "com.canonical.Myna.Whisper"
+# Set snap identity so myna-server --share-provider writes provider.env beside the socket
+export SNAP_NAME="com.canonical.Myna.Whisper"
+export SNAP_INSTANCE_NAME="com.canonical.Myna.Whisper"
 
-export VIRTUAL_ENV="$VENV"
-export PATH="$VENV/bin:$PATH"
-
-if [ "$ENGINE" = "nvidia-gpu" ]; then
+if [ "$DEVICE" = "cuda" ]; then
     CUDA_SITE="$EXTENSIONS_DIR/gpu-nvidia/site-packages"
-    export PYTHONPATH="$CUDA_SITE${PYTHONPATH:+:$PYTHONPATH}"
-    export LD_LIBRARY_PATH="$CUDA_SITE/nvidia/cu13/lib:$CUDA_SITE/nvidia/cudnn/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    if [ -d "$CUDA_SITE" ]; then
+        export PYTHONPATH="$CUDA_SITE${PYTHONPATH:+:$PYTHONPATH}"
+        export LD_LIBRARY_PATH="$CUDA_SITE/nvidia/cu13/lib:$CUDA_SITE/nvidia/cudnn/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    fi
 fi
 
-exec "$VENV/bin/python3" -m myna.server \
+exec python3 -m myna.server \
     --adapter whisper \
-    --engine "$ENGINE" \
-    --model-dir "$MODEL_DIR" \
-    --socket "$SOCKET"
+    --device "$DEVICE" \
+    --model "$MODEL_DIR" \
+    --socket "$SOCKET" \
+    --share-provider \
+    "$@"

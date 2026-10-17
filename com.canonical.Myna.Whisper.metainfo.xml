@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="runtime">
+  <id>com.canonical.Myna.Whisper</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>AGPL-3.0-or-later</project_license>
+  <name>Myna Whisper Inference Service</name>
+  <summary>Whisper speech-to-text inference service for Myna</summary>
+  <description>
+    <p>
+      Local, offline speech-to-text service exposing the Myna session API on a
+      Unix domain socket. Wraps OpenAI Whisper models served via faster-whisper
+      (CTranslate2).
+    </p>
+    <p>
+      Receives raw audio pushed from the Myna desktop client over a shared
+      Unix socket. Has no microphone access and makes no network calls during
+      transcription.
+    </p>
+  </description>
+  <url type="homepage">https://github.com/canonical/myna</url>
+  <url type="bugtracker">https://github.com/canonical/myna/issues</url>
+  <developer id="com.canonical">
+    <name>Canonical Ltd</name>
+  </developer>
+</component>
