@@ -91,80 +91,51 @@ systemctl --user enable --now com.canonical.Myna.service
 ### Prerequisites
 
 ```sh
-flatpak install flathub org.gnome.Platform//47 org.gnome.Sdk//47
-flatpak install flathub org.freedesktop.Sdk.Extension.rust-stable
+flatpak install flathub org.gnome.Platform//50 org.gnome.Sdk//50
+flatpak install flathub org.freedesktop.Sdk.Extension.rust-stable//25.08
+flatpak install flathub org.freedesktop.Sdk.Extension.llvm20//25.08
 ```
 
-### Build the client
+### Build and export the client
 
 ```sh
-flatpak-builder --user --install build/ com.canonical.Myna.yaml
+flatpak-builder --disable-rofiles-fuse --repo=repo --force-clean build-dir com.canonical.Myna.yaml
 ```
 
-### Build a backend
+### Install locally from repo
 
 ```sh
-# Populate the wheels/ directory first (see wheels/README.md)
-flatpak-builder --user --install build-whisper/ com.canonical.Myna.Whisper.yaml
+flatpak --user remote-add --if-not-exists --no-gpg-verify myna-local-repo repo
+flatpak --user install -y --reinstall myna-local-repo com.canonical.Myna
 ```
 
----
-
-## Installing (once on Flathub)
+### Run and test
 
 ```sh
-flatpak install flathub com.canonical.Myna
-flatpak install flathub com.canonical.Myna.Whisper
-# Default model (base) installs automatically; add more:
-flatpak install flathub com.canonical.Myna.Whisper.Model.Small
+# Launch Myna Settings GUI:
+flatpak run com.canonical.Myna
 
-# Enable the daemons
-systemctl --user enable --now com.canonical.Myna.service
-systemctl --user enable --now com.canonical.Myna.Whisper.service
+# Check status of dictation, settings, and connected backends:
+flatpak run --command=myna-status com.canonical.Myna
 
-# Bind a hotkey to toggle dictation (writes to host dconf):
-flatpak run --command=myna-install-shortcut com.canonical.Myna
-```
+# Start the background dictation daemon:
+flatpak run --command=myna-daemon com.canonical.Myna
 
----
-
-## Repository layout
-
-```
-com.canonical.Myna.yaml             ← client Flatpak manifest
-com.canonical.Myna.Whisper.yaml     ← Whisper backend manifest
-com.canonical.Myna.Parakeet.yaml    ← Parakeet backend manifest
-com.canonical.Myna.desktop          ← XDG desktop entry
-com.canonical.Myna.metainfo.xml     ← AppStream metadata
-scripts/
-  myna-daemon                       ← daemon launcher (adapted from snap)
-  myna-status                       ← status CLI launcher
-  myna-config                       ← config CLI wrapper
-  myna-testbed-wrapper              ← testbed CLI launcher
-  whisper-server                    ← Whisper backend launcher
-  parakeet-server                   ← Parakeet backend launcher
-  write-provider-env                ← writes provider.env for client discovery
-services/
-  com.canonical.Myna.service        ← systemd user service (client)
-  com.canonical.Myna.Whisper.service
-  com.canonical.Myna.Parakeet.service
-wheels/                             ← (gitignored) pre-built Python wheels
-  README.md                         ← how to populate this directory
+# Toggle dictation via hotkey / CLI:
+flatpak run --command=myna-toggle com.canonical.Myna
 ```
 
 ---
 
 ## Status
 
-Early port — **not yet functional**. The Flatpak manifests faithfully
-translate the snap architecture but several items remain:
+- [x] Client Flatpak manifest (`com.canonical.Myna.yaml`) complete and verified
+- [x] Flathub-compatible offline Cargo vendoring (517 crates in `cargo-sources.json`)
+- [x] GNOME 50 + LLVM 20 bindgen paths for `pipewire-sys`
+- [x] Builds all 4 components: `myna-desktop`, `myna-hud`, `myna-config`, `myna-testbed`
+- [x] Native socket discovery aligned (`/run/user/1000/myna/*/provider.env`)
+- [x] AppStream compose validation passing with icons and desktop integration
+- [x] Tested locally and confirmed running
+- [ ] Inference backend packaging (`com.canonical.Myna.Whisper` / `Parakeet`)
+- [ ] Model weights extension manifests
 
-- [ ] Confirm `myna-desktop` `--backend-dir` accepts `*.env` file format (may need an upstream patch if socket discovery only reads `provider.env` by exact name)
-- [ ] Wire `myna-install-shortcut` in Flatpak (dconf write needs `--socket=session-bus` and host dconf path)
-- [ ] Populate `wheels/` for offline builds and vendor Cargo dependencies
-- [ ] Build and test the Rust workspace inside the Flatpak SDK
-- [ ] Create model-weight extension manifests for each model size
-- [ ] Create GPU extension manifests (CUDA pip wheels)
-- [ ] CI: GitHub Actions workflow building all manifests
-
-See [PORTING-NOTES.md](PORTING-NOTES.md) for detailed design decisions.
