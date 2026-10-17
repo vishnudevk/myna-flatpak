@@ -1,11 +1,11 @@
 [Desktop Entry]
 Name=Myna
+GenericName=Speech-to-Text
 Comment=Local, offline speech-to-text for the desktop
-Exec=myna-daemon
+Exec=myna-config
 Icon=com.canonical.Myna
 Terminal=false
 Type=Application
-Categories=Utility;Accessibility;
+Categories=Utility;Accessibility;Settings;
 Keywords=speech;dictation;transcription;voice;accessibility;
-StartupNotify=false
-NoDisplay=true
+StartupNotify=true

@@ -21,12 +21,15 @@
       <li>com.canonical.Myna.Parakeet — Parakeet TDT 0.6B v3 (onnxruntime)</li>
     </ul>
   </description>
+  <launchable type="desktop-id">com.canonical.Myna.desktop</launchable>
   <url type="homepage">https://github.com/canonical/myna</url>
   <url type="bugtracker">https://github.com/canonical/myna/issues</url>
-  <developer_name>Canonical Ltd</developer_name>
+  <developer id="com.canonical">
+    <name>Canonical Ltd</name>
+  </developer>
   <content_rating type="oars-1.1" />
   <releases>
-    <release version="0.0.0" date="2026-01-01">
+    <release version="0.2.3" date="2026-03-01">
       <description>
         <p>Initial Flatpak packaging of Myna.</p>
       </description>
@@ -35,6 +38,7 @@
   <categories>
     <category>Utility</category>
     <category>Accessibility</category>
+    <category>Settings</category>
   </categories>
   <keywords>
     <keyword>speech</keyword>

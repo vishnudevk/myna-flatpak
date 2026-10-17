@@ -1,22 +1,23 @@
 #!/bin/sh
 # write-provider-env: write a provider.env file beside the backend socket.
 #
-# The myna client's --backend-dir mode scans every *.env file in the given
-# directory, reads the socket path from it and tries to connect. This script
-# is the Flatpak equivalent of `myna-server --share-provider` in the snap.
+# The myna client's --backend-dir mode scans every subdirectory in the given
+# directory, looking for <dir>/<name>/provider.env:
+#   SNAP_NAME=...
+#   UNIX_SOCKET=<relative_socket_filename>
 #
-# Usage: write-provider-env <socket-path> <env-file-path>
-#
-# The env file format is a simple KEY=VALUE list, matching what myna-server
-# writes in the snap (myna-server --share-provider writes provider.env):
-#   MYNA_SOCKET=/run/user/1000/myna/whisper.sock
-#   MYNA_SNAP=com.canonical.Myna.Whisper   (identifies the provider)
+# Usage: write-provider-env <socket-path> <env-file-path> [provider-name]
 set -eu
 
 SOCKET_PATH="$1"
 ENV_FILE="$2"
+PROVIDER_NAME="${3:-${FLATPAK_ID:-com.canonical.Myna.Backend}}"
+SOCKET_NAME=$(basename "$SOCKET_PATH")
 
-printf 'MYNA_SOCKET=%s\nMYNA_FLATPAK_APP=%s\n' \
-    "$SOCKET_PATH" \
-    "${FLATPAK_ID:-unknown}" \
+mkdir -p "$(dirname "$ENV_FILE")"
+
+printf 'SNAP_NAME=%s\nSNAP_INSTANCE_NAME=%s\nUNIX_SOCKET=%s\n' \
+    "$PROVIDER_NAME" \
+    "$PROVIDER_NAME" \
+    "$SOCKET_NAME" \
     > "$ENV_FILE"

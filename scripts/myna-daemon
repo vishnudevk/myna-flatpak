@@ -9,17 +9,18 @@
 #     In snap, the backend shares its socket directory via snapd's content
 #     interface, bind-mounted into $SNAP_DATA/backend/. In Flatpak we use
 #     $XDG_RUNTIME_DIR/myna/ (finish-args: --filesystem=xdg-run/myna:create),
-#     which both the client and any backend Flatpak declare.  The backend
-#     writes a provider.env beside its socket there; the client reads every
-#     *.env in that directory at each press, exactly as myna-desktop does
-#     in the snap (--backend-dir).
+#     which both the client and any backend Flatpak declare. The backend
+#     writes a provider.env in a subdirectory (<backend-dir>/<name>/provider.env),
+#     and the client's --backend-dir scans every subdirectory at each press.
+#
+#   Control socket:
+#     Explicitly placed at $XDG_RUNTIME_DIR/myna/myna-desktop.sock so that
+#     external callers (shortcuts, CLI scripts, other containers) can poke
+#     it via myna-toggle.
 #
 #   GSettings backend:
-#     The snap uses GSETTINGS_BACKEND=keyfile + XDG_CONFIG_HOME pointing
-#     at $SNAP_USER_COMMON/.config to avoid touching host dconf.
-#     In Flatpak we use the same keyfile backend; Flatpak already sandboxes
-#     $XDG_CONFIG_HOME to ~/.var/app/com.canonical.Myna/config/ by default,
-#     so the settings file stays app-private without extra env.
+#     Flatpak sandboxes $XDG_CONFIG_HOME to ~/.var/app/com.canonical.Myna/config.
+#     The keyfile store is kept app-private.
 #
 # Env knobs (all optional):
 #   MYNA_BACKEND_SOCKET  exact backend socket path (bypasses auto-discovery)
@@ -34,6 +35,8 @@ fi
 BACKEND_DIR="${XDG_RUNTIME_DIR}/myna"
 mkdir -p "$BACKEND_DIR"
 
+CONTROL_SOCKET="${BACKEND_DIR}/myna-desktop.sock"
+
 if [ -n "${MYNA_BACKEND_SOCKET:-}" ]; then
     set -- --socket "$MYNA_BACKEND_SOCKET" "$@"
 else
@@ -44,4 +47,4 @@ if [ -n "${MYNA_LANGUAGE:-}" ]; then
     set -- --language "$MYNA_LANGUAGE" "$@"
 fi
 
-exec /app/bin/myna-desktop "$@"
+exec /app/bin/myna-desktop --control-socket "$CONTROL_SOCKET" "$@"

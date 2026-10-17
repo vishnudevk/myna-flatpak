@@ -1,87 +1,59 @@
 id: com.canonical.Myna
 runtime: org.gnome.Platform
-runtime-version: '47'
+runtime-version: '50'
 sdk: org.gnome.Sdk
 sdk-extensions:
   - org.freedesktop.Sdk.Extension.rust-stable
-command: myna-daemon
+  - org.freedesktop.Sdk.Extension.llvm20
+command: myna-config
 
 # --- Permissions ---
-# Only the client snap has microphone/audio and desktop access.
-# The inference backend gets no audio hardware whatsoever (matches the snap model).
+# Only the client has microphone/audio and desktop access.
+# The inference backend gets no audio hardware access (matches the snap security model).
 finish-args:
-  # Wayland / X11 display (needed by myna-hud GTK4 window)
+  # Wayland / X11 display (for myna-hud overlay and myna-config GTK4 settings UI)
   - --socket=wayland
   - --socket=fallback-x11
   - --share=ipc
-  # PipeWire for microphone capture - accessed via portal
+  # PipeWire audio capture - accessed directly and via portal
   - --device=all
-  # IBus text injection (desktop-legacy equivalent)
+  # IBus text injection and desktop notifications over session bus
   - --socket=session-bus
-  # Allow reading/writing GSettings (dconf) for host keybinding integration
+  # Host dconf reading (for keybinding integration)
   - --filesystem=xdg-config/dconf:ro
-  # Shared IPC dir so backend snaps / Flatpak backends can drop their socket
+  # Shared IPC directory so backend Flatpaks drop their socket and provider.env
   - --filesystem=xdg-run/myna:create
-  # Access to home for myna-testbed WAV clip reading
+  # Home filesystem access (for myna-testbed WAV clip testing)
   - --filesystem=home
-
 
 modules:
   # ─────────────────────────────────────────────────────────────────────────
-  # libpipewire (PipeWire client library + minimal SPA plugins)
-  # The GNOME runtime ships PipeWire; we pin the same version the snap uses
-  # (noble = 1.0.x). If the runtime already provides a compatible version,
-  # this module can be dropped and the finish-args socket=wayland covers pw.
-  # ─────────────────────────────────────────────────────────────────────────
-  - name: pipewire
-    buildsystem: meson
-    config-opts:
-      - -Daudiomixer=disabled
-      - -Daudioconvert=disabled
-      - -Davahi=disabled
-      - -Dbluez5=disabled
-      - -Djack=disabled
-      - -Dpulseaudio=disabled
-      - -Dvulkan=disabled
-      - -Dgstreamer=disabled
-      - -Dexamples=disabled
-      - -Dtests=disabled
-      - -Dsession-managers=[]
-    sources:
-      - type: git
-        url: https://gitlab.freedesktop.org/pipewire/pipewire.git
-        tag: '1.0.5'
-        commit: 0e6d91e4d8ebc2c28cf3e7aa1a1c71d77a2b13a9
-
-  # ─────────────────────────────────────────────────────────────────────────
   # Myna Rust client workspace
-  # Builds: myna-desktop (daemon + toggle), myna-hud, myna-testbed, myna-cli
+  # Builds:
+  #   - myna-desktop: the dictation daemon, toggle & status logic
+  #   - myna-hud: GTK4/Adwaita overlay showing dictation state without focus
+  #   - myna-config: GTK4/Adwaita Myna Settings GUI application
+  #   - myna-testbed: development CLI for testing audio & dialect sessions
   #
   # Offline Cargo build (Flathub-compatible):
-  #   cargo-sources.json was generated from client/Cargo.lock via:
-  #     python3 tools/flatpak-cargo-generator.py client/Cargo.lock \
-  #             -o cargo-sources.json
-  #   Each entry downloads one crate archive + checksum into cargo/vendor/.
-  #   .cargo/config.toml redirects crates-io to that vendor tree so no
-  #   network access is needed at build time.
+  #   cargo-sources.json was generated from client/Cargo.lock via
+  #   flatpak-cargo-generator.py. Each crate archive is downloaded into
+  #   cargo/vendor/, and .cargo/config.toml redirects crates-io to that tree.
   # ─────────────────────────────────────────────────────────────────────────
   - name: myna
     buildsystem: simple
     build-options:
-      append-path: /usr/lib/sdk/rust-stable/bin
+      append-path: /usr/lib/sdk/rust-stable/bin:/usr/lib/sdk/llvm20/bin
       env:
-        # Cargo home inside the build tree; flatpak-builder bind-mounts it
-        # read-write so rustup and cargo can write to it.
         CARGO_HOME: /run/build/myna/cargo
         RUST_BACKTRACE: '1'
-        # Point the staged libpipewire SPA plugins at the Flatpak install prefix
-        SPA_PLUGIN_DIR: /app/lib/spa-0.2
-        PIPEWIRE_MODULE_DIR: /app/lib/pipewire-0.3
+        # Point bindgen (used by pipewire-sys) to libclang in llvm20 SDK extension
+        LIBCLANG_PATH: /usr/lib/sdk/llvm20/lib
+        # Point PipeWire SPA plugins and modules to GNOME platform paths
+        SPA_PLUGIN_DIR: /usr/lib/x86_64-linux-gnu/spa-0.2
+        PIPEWIRE_MODULE_DIR: /usr/lib/x86_64-linux-gnu/pipewire-0.3
     build-commands:
       # ── Offline Cargo config ────────────────────────────────────────────
-      # Tell Cargo to use the vendor tree that flatpak-cargo-generator
-      # populated at cargo/vendor/ (see sources below).  This replaces the
-      # crates-io source entirely, so no network is required.
       - mkdir -p .cargo
       - |
         cat >> .cargo/config.toml << 'EOF'
@@ -92,25 +64,19 @@ modules:
         directory = "cargo/vendor"
         EOF
 
-      # ── Rust toolchain ──────────────────────────────────────────────────
-      # Install the channel pinned in client/rust-toolchain.toml via the
-      # rust-stable SDK extension (rustup is already on PATH from build-options).
-      # We use `rustup default` rather than `rustup toolchain install` because
-      # Ubuntu's rustup rejects the latter if ~/.cargo is managed externally.
-      - |
-        channel=$(sed -n 's/^channel = "\(.*\)"$/\1/p' client/rust-toolchain.toml)
-        rustup set profile minimal
-        rustup default "$channel"
+      # ── Version staging ─────────────────────────────────────────────────
+      # Avoid depending on git rev-parse during sandbox build
+      - echo "0.2.3" > client/.version
 
-      # ── Cargo builds (all offline, all locked) ──────────────────────────
+      # ── Cargo builds (all offline, locked) ──────────────────────────────
       - cargo install -f --locked --path client/myna-desktop --root /app
       - cargo install -f --locked --path client/myna-cli     --root /app
       - cargo install -f --locked --path client/myna-hud     --root /app
+      - cargo install -f --locked --path client/myna-config  --root /app
       - rm -f /app/.crates.toml /app/.crates2.json
 
-      # Strip DWARF to shrink the install; keep the symbol table so panic
-      # backtraces remain readable (mirrors the snap's --strip-debug pass).
-      - strip --strip-debug /app/bin/myna-desktop /app/bin/myna-testbed /app/bin/myna-hud
+      # Strip DWARF debuginfo, keeping symbols for panic backtraces
+      - strip --strip-debug /app/bin/myna-desktop /app/bin/myna-testbed /app/bin/myna-hud /app/bin/myna-config
 
       # ── GSettings schema ────────────────────────────────────────────────
       - |
@@ -119,7 +85,7 @@ modules:
           /app/share/glib-2.0/schemas/com.canonical.Myna.Dictation.gschema.xml
       - glib-compile-schemas /app/share/glib-2.0/schemas
 
-      # ── Gettext translations (myna-desktop + myna-orchestrator domains) ─
+      # ── Gettext translations ────────────────────────────────────────────
       - |
         for po in client/myna-desktop/po/*.po client/myna-orchestrator/po/*.po; do
           [ -f "$po" ] || continue
@@ -129,35 +95,53 @@ modules:
           msgfmt "$po" -o "/app/share/locale/$lang/LC_MESSAGES/$domain.mo"
         done
 
-      # ── Launcher scripts (adapted from myna-snap/scripts/) ──────────────
-      - install -Dm755 packaging/flatpak/scripts/myna-daemon          /app/bin/myna-daemon
-      - install -Dm755 packaging/flatpak/scripts/myna-config          /app/bin/myna-config
-      - install -Dm755 packaging/flatpak/scripts/myna-status          /app/bin/myna-status
-      - install -Dm755 packaging/flatpak/scripts/myna-testbed-wrapper /app/bin/myna-testbed-wrapper
+      # ── Launcher scripts ────────────────────────────────────────────────
+      - install -Dm755 myna-daemon          /app/bin/myna-daemon
+      - install -Dm755 myna-status          /app/bin/myna-status
+      - install -Dm755 myna-toggle          /app/bin/myna-toggle
+      - install -Dm755 myna-testbed-wrapper /app/bin/myna-testbed-wrapper
 
-      # ── Desktop integration ─────────────────────────────────────────────
-      - install -Dm644 packaging/flatpak/com.canonical.Myna.desktop
+      # ── Desktop & AppStream metadata ────────────────────────────────────
+      - install -Dm644 com.canonical.Myna.desktop
           /app/share/applications/com.canonical.Myna.desktop
-      - install -Dm644 packaging/flatpak/com.canonical.Myna.metainfo.xml
+      - install -Dm644 com.canonical.Myna.metainfo.xml
           /app/share/metainfo/com.canonical.Myna.metainfo.xml
+      - install -Dm644 client/myna-config/data/com.canonical.Myna.Config.desktop
+          /app/share/applications/com.canonical.Myna.Config.desktop
+      - install -Dm644 client/myna-config/data/com.canonical.Myna.Config.metainfo.xml
+          /app/share/metainfo/com.canonical.Myna.Config.metainfo.xml
+
+      # ── Application icons ───────────────────────────────────────────────
+      - install -Dm644 client/data/icons/hicolor/scalable/apps/com.canonical.Myna.svg
+          /app/share/icons/hicolor/scalable/apps/com.canonical.Myna.svg
+      - install -Dm644 client/data/icons/hicolor/scalable/apps/com.canonical.Myna.Config.svg
+          /app/share/icons/hicolor/scalable/apps/com.canonical.Myna.Config.svg
+
+      # ── Systemd user service unit ───────────────────────────────────────
+      - install -Dm644 com.canonical.Myna.service
+          /app/share/systemd/user/com.canonical.Myna.service
+
     sources:
-      # The upstream Myna source
+      # Upstream Myna source
       - type: git
         url: https://github.com/canonical/myna.git
-        branch: main
-        dest: .
+        commit: c1bd11cf487de4bc273c74106ba9bd5bfc82eaf2
 
-      # Flatpak-specific packaging (scripts, manifests — this repo itself)
-      - type: dir
-        path: .
-        dest: packaging/flatpak
+      # Packaging helper scripts & integration files
+      - type: file
+        path: scripts/myna-daemon
+      - type: file
+        path: scripts/myna-status
+      - type: file
+        path: scripts/myna-toggle
+      - type: file
+        path: scripts/myna-testbed-wrapper
+      - type: file
+        path: com.canonical.Myna.desktop
+      - type: file
+        path: com.canonical.Myna.metainfo.xml
+      - type: file
+        path: services/com.canonical.Myna.service
 
-      # ── Vendored Cargo crates ──────────────────────────────────────────
-      # Generated from client/Cargo.lock by:
-      #   python3 tools/flatpak-cargo-generator.py \
-      #           myna/client/Cargo.lock -o cargo-sources.json
-      #
-      # flatpak-builder expands this list and downloads each crate archive
-      # (+ its .cargo-checksum.json) into cargo/vendor/ before any
-      # build-command runs.  Regenerate whenever Cargo.lock changes.
+      # Vendored Cargo crates (517 crates, checksum-verified)
       - cargo-sources.json

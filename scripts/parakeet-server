@@ -1,15 +1,18 @@
 #!/bin/sh
 # parakeet-server (Flatpak): launch myna-server with the active Parakeet engine.
-# Mirrors whisper-server; see that script for the detailed translation notes.
+#
+# Layout:
+#   $XDG_RUNTIME_DIR/myna/parakeet/provider.env
+#   $XDG_RUNTIME_DIR/myna/parakeet/myna.sock
 set -eu
 
 VENV=/app/lib/myna-parakeet/venv
 ENGINES_DIR=/app/lib/myna-parakeet/engines
 EXTENSIONS_DIR=/app/extensions
-BACKEND_DIR="${XDG_RUNTIME_DIR}/myna"
-SOCKET="${BACKEND_DIR}/parakeet.sock"
+SHARE_DIR="${XDG_RUNTIME_DIR}/myna/parakeet"
+SOCKET="${SHARE_DIR}/myna.sock"
 
-mkdir -p "$BACKEND_DIR"
+mkdir -p "$SHARE_DIR"
 
 ENGINE="${MYNA_PARAKEET_ENGINE:-cpu}"
 
@@ -25,7 +28,7 @@ if [ ! -d "$MODEL_DIR" ]; then
     exit 1
 fi
 
-write-provider-env "$SOCKET" "$BACKEND_DIR/parakeet.env"
+write-provider-env "$SOCKET" "$SHARE_DIR/provider.env" "com.canonical.Myna.Parakeet"
 
 export VIRTUAL_ENV="$VENV"
 export PATH="$VENV/bin:$PATH"
