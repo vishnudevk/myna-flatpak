@@ -35,6 +35,14 @@ fi
 BACKEND_DIR="${XDG_RUNTIME_DIR}/myna"
 mkdir -p "$BACKEND_DIR"
 
+WHISPER_SOCKET="${BACKEND_DIR}/whisper/myna.sock"
+if [ -x /app/bin/myna-whisper-server ]; then
+    if [ ! -S "$WHISPER_SOCKET" ]; then
+        echo "myna-daemon: launching bundled Whisper backend..." >&2
+        /app/bin/myna-whisper-server >/dev/null 2>&1 &
+    fi
+fi
+
 CONTROL_SOCKET="${BACKEND_DIR}/myna-desktop.sock"
 
 if [ -n "${MYNA_BACKEND_SOCKET:-}" ]; then

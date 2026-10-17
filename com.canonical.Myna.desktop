@@ -2,7 +2,7 @@
 Name=Myna
 GenericName=Speech-to-Text
 Comment=Local, offline speech-to-text for the desktop
-Exec=myna-config
+Exec=myna-app
 Icon=com.canonical.Myna
 Terminal=false
 Type=Application

@@ -1,0 +1,166 @@
+diff --git a/client/myna-config/src/adapters/flatpak_backend.rs b/client/myna-config/src/adapters/flatpak_backend.rs
+new file mode 100644
+index 00000000..20bc55c7
+--- /dev/null
++++ b/client/myna-config/src/adapters/flatpak_backend.rs
+@@ -0,0 +1,160 @@
++//! Backend repository and system configurator for Flatpak and standalone environments.
++//!
++//! Unlike Ubuntu Snap which uses snapd over a Unix domain socket (/run/snapd.socket)
++//! and pkexec for slot/plug connections, Flatpak bundles the client and inference
++//! engine within the sandbox or communicates directly over $XDG_RUNTIME_DIR/myna/.
++
++use std::path::PathBuf;
++use std::process::Command;
++
++use async_trait::async_trait;
++
++use crate::active_backend::SwitchPlan;
++use crate::backend_apply::ApplyPreview;
++use crate::command::CancellationToken;
++use crate::diagnostics::InstalledSnap;
++use crate::domain::{
++    ActiveBackendState, BackendIdentity, BackendSnapshot, BackendSurfaceError,
++    CommandResult, ConnectionSnapshot,
++};
++use crate::ports::{
++    BackendRepository, SetUpPlan, SystemConfigurator,
++    SystemConfiguratorError, SystemConfiguratorFailure,
++};
++use crate::snap_changes::ChangeInProgress;
++
++#[derive(Clone, Default)]
++pub struct FlatpakBackendRepository;
++
++impl FlatpakBackendRepository {
++    pub fn new() -> Self {
++        ensure_backend_started();
++        Self
++    }
++}
++
++fn ensure_backend_started() {
++    let runtime_dir = std::env::var("XDG_RUNTIME_DIR")
++        .map(PathBuf::from)
++        .unwrap_or_else(|_| PathBuf::from("/tmp"));
++    let whisper_socket = runtime_dir.join("myna/whisper/myna.sock");
++
++    if !whisper_socket.exists() {
++        if let Ok(server_path) = std::env::var("MYNA_WHISPER_SERVER") {
++            let _ = Command::new(server_path).spawn();
++        } else if std::path::Path::new("/app/bin/myna-whisper-server").exists() {
++            let _ = Command::new("/app/bin/myna-whisper-server").spawn();
++        }
++    }
++}
++
++#[async_trait(?Send)]
++impl BackendRepository for FlatpakBackendRepository {
++    async fn installed_snaps(
++        &self,
++        _cancellation: CancellationToken,
++    ) -> Result<Vec<InstalledSnap>, BackendSurfaceError> {
++        Ok(vec![
++            InstalledSnap {
++                name: "myna".to_string(),
++                version: env!("MYNA_VERSION").to_string(),
++            },
++            InstalledSnap {
++                name: "myna-whisper".to_string(),
++                version: "1.0.0".to_string(),
++            },
++        ])
++    }
++
++    async fn discover(
++        &self,
++        _cancellation: CancellationToken,
++    ) -> Result<ConnectionSnapshot, BackendSurfaceError> {
++        let backend = BackendIdentity::new("myna-whisper", "provider");
++        Ok(ConnectionSnapshot::new(
++            vec![backend.clone()],
++            ActiveBackendState::Connected(backend),
++        ))
++    }
++
++    async fn read_snapshot(
++        &self,
++        backend: &BackendIdentity,
++        _cancellation: CancellationToken,
++    ) -> BackendSnapshot {
++        BackendSnapshot::empty(backend.clone())
++    }
++
++    async fn refresh(
++        &self,
++        cancellation: CancellationToken,
++    ) -> Result<ConnectionSnapshot, BackendSurfaceError> {
++        self.discover(cancellation).await
++    }
++}
++
++#[derive(Clone, Default)]
++pub struct FlatpakSystemConfigurator;
++
++#[async_trait(?Send)]
++impl SystemConfigurator for FlatpakSystemConfigurator {
++    async fn execute_backend_switch(
++        &self,
++        _plan: &SwitchPlan,
++        _cancellation: CancellationToken,
++    ) -> Result<Vec<CommandResult>, SystemConfiguratorFailure> {
++        Ok(Vec::new())
++    }
++
++    async fn restart_myna(
++        &self,
++        _cancellation: CancellationToken,
++    ) -> Result<(), SystemConfiguratorError> {
++        ensure_backend_started();
++        Ok(())
++    }
++
++    async fn apply_backend_config(
++        &self,
++        _preview: &ApplyPreview,
++        _cancellation: CancellationToken,
++    ) -> Result<Vec<CommandResult>, SystemConfiguratorFailure> {
++        Ok(Vec::new())
++    }
++
++    async fn changes_in_progress(
++        &self,
++        _cancellation: CancellationToken,
++    ) -> Result<Vec<ChangeInProgress>, String> {
++        Ok(Vec::new())
++    }
++
++    async fn user_daemons_enabled(&self, _cancellation: CancellationToken) -> Result<bool, String> {
++        Ok(true)
++    }
++
++    async fn set_up(
++        &self,
++        _plan: &SetUpPlan,
++        _cancellation: CancellationToken,
++    ) -> Result<(), SystemConfiguratorError> {
++        ensure_backend_started();
++        Ok(())
++    }
++
++    async fn install_snap(
++        &self,
++        _snap: &str,
++        _cancellation: CancellationToken,
++    ) -> Result<Option<String>, SystemConfiguratorError> {
++        Ok(None)
++    }
++
++    async fn snap_change(
++        &self,
++        _change_id: &str,
++        _cancellation: CancellationToken,
++    ) -> Result<ChangeInProgress, String> {
++        Err("not applicable in Flatpak".to_string())
++    }
++}

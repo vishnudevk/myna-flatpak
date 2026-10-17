@@ -22,8 +22,8 @@ DEVICE="${MYNA_WHISPER_DEVICE:-cpu}"
 MODEL="${MYNA_WHISPER_MODEL:-base}"
 
 # Resolve model weights directory.
-# Checks user data directory first, then Flatpak extension directory.
-USER_DATA_DIR="${XDG_DATA_HOME:-$HOME/.var/app/com.canonical.Myna.Whisper/data}/myna/models/$MODEL"
+# In Flatpak, $XDG_DATA_HOME is ~/.var/app/com.canonical.Myna/data
+USER_DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/myna/models/$MODEL"
 EXT_DATA_DIR="$EXTENSIONS_DIR/models/$MODEL"
 
 if [ -d "$USER_DATA_DIR" ]; then
@@ -31,21 +31,19 @@ if [ -d "$USER_DATA_DIR" ]; then
 elif [ -d "$EXT_DATA_DIR" ]; then
     MODEL_DIR="$EXT_DATA_DIR"
 else
-    echo "myna-whisper: model '$MODEL' weights not found." >&2
-    echo "Looked in:" >&2
-    echo "  1. $USER_DATA_DIR" >&2
-    echo "  2. $EXT_DATA_DIR" >&2
-    echo "" >&2
-    echo "To install as a Flatpak extension:" >&2
-    echo "  flatpak install com.canonical.Myna.Whisper.Model.$(echo "$MODEL" | sed 's/./\u&/')" >&2
-    echo "Or place the CTranslate2 model files into:" >&2
-    echo "  $USER_DATA_DIR" >&2
-    exit 1
+    echo "myna-whisper: model '$MODEL' weights not found in $USER_DATA_DIR." >&2
+    echo "myna-whisper: attempting to download '$MODEL' automatically..." >&2
+    if /app/bin/myna-download-model "$MODEL"; then
+        MODEL_DIR="$USER_DATA_DIR"
+    else
+        echo "myna-whisper: failed to download model '$MODEL'." >&2
+        exit 1
+    fi
 fi
 
 # Set snap identity so myna-server --share-provider writes provider.env beside the socket
-export SNAP_NAME="com.canonical.Myna.Whisper"
-export SNAP_INSTANCE_NAME="com.canonical.Myna.Whisper"
+export SNAP_NAME="myna-whisper"
+export SNAP_INSTANCE_NAME="myna-whisper"
 
 if [ "$DEVICE" = "cuda" ]; then
     CUDA_SITE="$EXTENSIONS_DIR/gpu-nvidia/site-packages"

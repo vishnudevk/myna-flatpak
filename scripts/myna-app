@@ -1,0 +1,48 @@
+#!/bin/sh
+# myna-app: main Flatpak application launcher.
+# Starts the background Whisper inference engine and Myna dictation daemon,
+# then opens the Myna Settings GUI.
+set -eu
+
+BACKEND_DIR="${XDG_RUNTIME_DIR}/myna"
+mkdir -p "$BACKEND_DIR/whisper"
+
+WHISPER_SOCKET="${BACKEND_DIR}/whisper/myna.sock"
+DAEMON_SOCKET="${BACKEND_DIR}/myna-desktop.sock"
+
+# Function to test whether a Unix domain socket is active and accepting connections
+is_socket_listening() {
+    target="$1"
+    [ -S "$target" ] || return 1
+    python3 -c "
+import socket, sys
+s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+try:
+    s.connect('$target')
+    s.close()
+    sys.exit(0)
+except Exception:
+    sys.exit(1)
+" 2>/dev/null
+}
+
+# 1. Start Whisper STT server if not running or stale
+if ! is_socket_listening "$WHISPER_SOCKET"; then
+    echo "myna-app: starting Whisper speech-to-text backend..." >&2
+    rm -f "$WHISPER_SOCKET"
+    if [ -x /app/bin/myna-whisper-server ]; then
+        /app/bin/myna-whisper-server >/dev/null 2>&1 &
+    fi
+fi
+
+# 2. Start Myna dictation daemon if not running or stale
+if ! is_socket_listening "$DAEMON_SOCKET"; then
+    echo "myna-app: starting Myna dictation daemon..." >&2
+    rm -f "$DAEMON_SOCKET"
+    if [ -x /app/bin/myna-daemon ]; then
+        /app/bin/myna-daemon >/dev/null 2>&1 &
+    fi
+fi
+
+# 3. Present Myna Settings UI
+exec /app/bin/myna-config "$@"
