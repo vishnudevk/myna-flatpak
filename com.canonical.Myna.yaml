@@ -106,10 +106,6 @@ modules:
           /app/share/applications/com.canonical.Myna.desktop
       - install -Dm644 com.canonical.Myna.metainfo.xml
           /app/share/metainfo/com.canonical.Myna.metainfo.xml
-      - install -Dm644 client/myna-config/data/com.canonical.Myna.Config.desktop
-          /app/share/applications/com.canonical.Myna.Config.desktop
-      - install -Dm644 client/myna-config/data/com.canonical.Myna.Config.metainfo.xml
-          /app/share/metainfo/com.canonical.Myna.Config.metainfo.xml
 
       # ── Application icons ───────────────────────────────────────────────
       - install -Dm644 client/data/icons/hicolor/scalable/apps/com.canonical.Myna.svg
