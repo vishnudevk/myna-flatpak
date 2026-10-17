@@ -1,6 +1,8 @@
 # Flatpak build artefacts
 .flatpak-builder/
 build/
+build-whisper/
+build-parakeet/
 repo/
 
 # Python cache
@@ -11,5 +13,12 @@ __pycache__/
 .vscode/
 *.swp
 
-# The upstream snap source (submodule or clone, not part of this packaging repo)
+# Pre-built Python wheels (large binaries, not committed)
+# See wheels/README.md for how to populate this directory.
+wheels/whisper/
+wheels/parakeet/
+wheels/whisper-cuda/
+wheels/parakeet-cuda/
+
+# The upstream snap source (submodule or local clone, not part of this repo)
 myna/
