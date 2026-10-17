@@ -62,23 +62,25 @@ Snap's **components** (per-model snap archives) map cleanly to Flatpak
 **extensions** — independently installable add-ons that contribute a
 read-only mount at a declared directory inside the app's `/app/extensions/`.
 
-### Engine selection: modelctl → env vars / manifest defaults
+### All-in-One Flatpak with Bundled Whisper Backend
 
-The snap uses `modelctl` (from `inference-snaps-cli`) for engine/model
-selection and hardware probing. `modelctl` is snap-specific. In Flatpak
-the active engine and model are resolved from:
+`com.canonical.Myna` bundles both the client (Rust UI, dictation daemon, HUD, status) and the inference backend (`faster-whisper` CTranslate2 Python server). When launched, `myna-app`:
 
-1. `MYNA_WHISPER_ENGINE` / `MYNA_PARAKEET_ENGINE` env var (override)
-2. The `default:` key in `engines/<engine>/engine.yaml` (manifest default)
+1. Starts `myna-whisper-server` in the background (if not already running).
+2. Starts `myna-daemon` in the background (if not already running).
+3. Opens the GTK4/Libadwaita Myna Settings GUI (`myna-config`).
 
-A future `myna-config` subcommand will expose this via GSettings
-(`com.canonical.Myna.Dictation`).
+### Offline & First-Run Model Provisioning
 
-### Daemon lifecycle: snap user daemon → systemd user service
+Models (such as `base` or `tiny`) are stored in `$XDG_DATA_HOME/myna/models/` (`~/.var/app/com.canonical.Myna/data/myna/models/`). If no weights exist on first run, `myna-whisper-server` automatically downloads the default model from Hugging Face via `myna-download-model`. Model sizes can also be manually downloaded with:
 
-The snap's `daemon: simple` + `daemon-scope: user` maps to a systemd
-**user service** installed by the Flatpak at
-`/app/share/systemd/user/com.canonical.Myna.service`. Enable it once:
+```sh
+flatpak run --command=myna-download-model com.canonical.Myna <tiny|base|small|large-v3|large-v3-turbo>
+```
+
+### Daemon lifecycle: snap user daemon → systemd user service / auto-launch
+
+The Myna desktop entry runs `myna-app`, which supervises both the daemon and backend. Alternatively, the systemd **user service** installed at `/app/share/systemd/user/com.canonical.Myna.service` can be enabled to run Myna at login:
 
 ```sh
 systemctl --user enable --now com.canonical.Myna.service
