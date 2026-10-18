@@ -129,15 +129,36 @@ flatpak run --command=myna-toggle com.canonical.Myna
 
 ---
 
-## Status
+---
 
-- [x] Client Flatpak manifest (`com.canonical.Myna.yaml`) complete and verified
-- [x] Flathub-compatible offline Cargo vendoring (517 crates in `cargo-sources.json`)
-- [x] GNOME 50 + LLVM 20 bindgen paths for `pipewire-sys`
-- [x] Builds all 4 components: `myna-desktop`, `myna-hud`, `myna-config`, `myna-testbed`
-- [x] Native socket discovery aligned (`/run/user/1000/myna/*/provider.env`)
-- [x] AppStream compose validation passing with icons and desktop integration
-- [x] Tested locally and confirmed running
-- [ ] Inference backend packaging (`com.canonical.Myna.Whisper` / `Parakeet`)
-- [ ] Model weights extension manifests
+## Current Status
+
+### ✅ What is Done & Working
+
+- **All-in-One Flatpak (`com.canonical.Myna`):**
+  - Bundles the complete client stack: dictation daemon (`myna-desktop`), GTK4 settings UI (`myna-config`), HUD overlay (`myna-hud`), and testbed (`myna-testbed`).
+  - Bundles the offline Whisper Speech-to-Text inference server (`faster-whisper` CTranslate2 Python runtime).
+- **Build Performance & Caching:**
+  - Fast developer build script (`scripts/build-flatpak.sh`) with incremental caching.
+  - Unified single-pass workspace cargo compilation with `lld` linker and parallel release profile optimizations (cold build ~1m 47s, cached rebuild ~24s).
+  - Split manifest into `myna` (Rust compilation) and `myna-packaging` (launcher scripts & desktop integration) for instant packaging tweaks.
+- **Flatpak Integration Patches (`patches/`):**
+  - `0001-flatpak-backend-support.patch`: Skips Snap-specific onboarding in Flatpak, detects models in `$XDG_DATA_HOME/myna/models/`, and reports active engine `faster-whisper-cpu`.
+  - `0002-shortcut-desktop-steps.patch`: Replaces generic paragraph with desktop-specific step-by-step instructions for GNOME and KDE Plasma shortcut setup.
+  - `0003-flatpak-ibus-pid-check.patch`: Fixes "Typing unavailable" IBus connection failure by bypassing host `/proc/<pid>` checks inside Flatpak sandbox PID namespaces.
+- **Audio & Text Injection:**
+  - Native PipeWire audio streaming and IBus direct text injection tested and working end-to-end with USB and built-in microphones.
+  - Automatic model downloading (`myna-download-model`) on first run.
+  - Hotkey toggling via `flatpak run com.canonical.Myna myna-toggle` or `flatpak run --command=myna-toggle com.canonical.Myna`.
+
+### ⏳ Pending & Known Considerations
+
+- **Bluetooth Headset Profile Switching (WirePlumber / PipeWire):**
+  - Myna upstream sets `media.role = "Communication"`, which triggers WirePlumber's `bluetooth.autoswitch-to-headset-profile`.
+  - Bluetooth headset profile renegotiation (switching from A2DP stereo to HFP/HSP mono) often takes > 3 seconds, which exceeds Myna's strict 3-second watchdog timer (`SILENCE_TIMEOUT`), triggering `Some audio lost`.
+  - *Recommendation / Workaround:* Keep a connected USB or built-in microphone as the default input device in GNOME Sound Settings, or patch `media.role` to `VoiceRecognition`.
+- **Standalone Backend & Extensions:**
+  - Manifests for decoupled `com.canonical.Myna.Whisper` / `com.canonical.Myna.Parakeet` and CUDA GPU runtime extensions for setups that prefer independent backend containers.
+- **Microphone Device Selector in Settings:**
+  - Upstream Myna Settings does not currently offer a microphone picker in the UI (it uses the system default PipeWire source unless launched with `--target <node>`).
 

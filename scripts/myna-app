@@ -31,7 +31,7 @@ if ! is_socket_listening "$WHISPER_SOCKET"; then
     echo "myna-app: starting Whisper speech-to-text backend..." >&2
     rm -f "$WHISPER_SOCKET"
     if [ -x /app/bin/myna-whisper-server ]; then
-        /app/bin/myna-whisper-server >/dev/null 2>&1 &
+        /app/bin/myna-whisper-server >> "$BACKEND_DIR/whisper/server.log" 2>&1 &
     fi
 fi
 
@@ -40,9 +40,18 @@ if ! is_socket_listening "$DAEMON_SOCKET"; then
     echo "myna-app: starting Myna dictation daemon..." >&2
     rm -f "$DAEMON_SOCKET"
     if [ -x /app/bin/myna-daemon ]; then
-        /app/bin/myna-daemon >/dev/null 2>&1 &
+        /app/bin/myna-daemon >> "$BACKEND_DIR/daemon.log" 2>&1 &
     fi
 fi
 
-# 3. Present Myna Settings UI
+# 3. If a subcommand or toggle flag was passed, run it; otherwise present Myna Settings UI
+if [ "${1:-}" = "--toggle" ] || [ "${1:-}" = "myna-toggle" ]; then
+    shift || true
+    exec /app/bin/myna-toggle "$@"
+elif [ $# -gt 0 ] && [ -x "/app/bin/$1" ]; then
+    cmd="/app/bin/$1"
+    shift
+    exec "$cmd" "$@"
+fi
+
 exec /app/bin/myna-config "$@"

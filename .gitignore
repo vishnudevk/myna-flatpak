@@ -1,6 +1,7 @@
 # Flatpak build artefacts
 .flatpak-builder/
 build/
+build-dir/
 build-whisper/
 build-parakeet/
 repo/

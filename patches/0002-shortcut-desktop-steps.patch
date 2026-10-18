@@ -1,0 +1,45 @@
+diff --git a/client/myna-config/src/shortcut_ui.rs b/client/myna-config/src/shortcut_ui.rs
+index 9825d517..49694eec 100644
+--- a/client/myna-config/src/shortcut_ui.rs
++++ b/client/myna-config/src/shortcut_ui.rs
+@@ -674,12 +674,35 @@ pub fn onboarding_description(state: &ShortcutState) -> String {
+     }
+ }
+ 
+-/// Why there is no button, and the command to bind by hand.
++/// Why there is no button, and the step-by-step instructions to bind by hand.
+ fn unsupported_text() -> String {
+-    gettextrs::gettext(
+-        "This desktop cannot set up the shortcut. Bind this command to a key in its settings: {command}",
+-    )
+-    .replace("{command}", crate::shortcut::TOGGLE_COMMAND)
++    let desktop = std::env::var("XDG_CURRENT_DESKTOP")
++        .unwrap_or_default()
++        .to_uppercase();
++    let command = crate::shortcut::TOGGLE_COMMAND;
++
++    if desktop.contains("KDE") || desktop.contains("PLASMA") {
++        format!(
++            "Set up in KDE Plasma:\n\
++             1. System Settings → Shortcuts → Add New → Command\n\
++             2. Command: {command}\n\
++             3. Assign your preferred shortcut (e.g. Meta + J)"
++        )
++    } else if desktop.contains("GNOME") {
++        format!(
++            "Set up in GNOME Settings:\n\
++             1. Settings → Keyboard → Custom Shortcuts (+)\n\
++             2. Command: {command}\n\
++             3. Assign your preferred shortcut (e.g. Super + J)"
++        )
++    } else {
++        format!(
++            "Set up in Keyboard Settings:\n\
++             1. Open desktop Keyboard Shortcuts\n\
++             2. Add custom shortcut with Command: {command}\n\
++             3. Assign your preferred key"
++        )
++    }
+ }
+ 
+ /// The Myna page row's subtitle for `state`; the keys speak for a bound one.

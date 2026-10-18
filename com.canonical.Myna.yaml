@@ -17,7 +17,9 @@ finish-args:
   - --share=ipc
   # Network access for downloading Whisper models at runtime
   - --share=network
-  # PipeWire audio capture - accessed directly and via portal
+  # PipeWire audio capture and sound preview playback
+  - --filesystem=xdg-run/pipewire-0
+  - --socket=pulseaudio
   - --device=all
   # IBus text injection and desktop notifications over session bus
   - --socket=session-bus
@@ -100,30 +102,42 @@ modules:
         SPA_PLUGIN_DIR: /usr/lib/x86_64-linux-gnu/spa-0.2
         PIPEWIRE_MODULE_DIR: /usr/lib/x86_64-linux-gnu/pipewire-0.3
     build-commands:
-      # ── Offline Cargo config ────────────────────────────────────────────
+      # ── Fast Offline Cargo configuration ────────────────────────────────
       - mkdir -p .cargo
       - |
-        cat >> .cargo/config.toml << 'EOF'
+        cat > .cargo/config.toml << 'EOF'
         [source.crates-io]
         replace-with = "vendored-sources"
 
         [source.vendored-sources]
         directory = "cargo/vendor"
+
+        [build]
+        rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+
+        [profile.release]
+        opt-level = 3
+        codegen-units = 16
+        lto = "thin"
+        debug = 0
         EOF
 
       # ── Version staging ─────────────────────────────────────────────────
       # Avoid depending on git rev-parse during sandbox build
       - echo "0.2.3" > client/.version
 
-      # ── Cargo builds (all offline, locked) ──────────────────────────────
-      - cargo install -f --locked --path client/myna-desktop --root /app
-      - cargo install -f --locked --path client/myna-cli     --root /app
-      - cargo install -f --locked --path client/myna-hud     --root /app
-      - cargo install -f --locked --path client/myna-config  --root /app
-      - rm -f /app/.crates.toml /app/.crates2.json
+      # ── Unified Workspace Cargo build (offline, parallel, shared target) 
+      - cargo build --release --locked --manifest-path client/Cargo.toml -p myna-desktop -p myna-cli -p myna-hud -p myna-config
+
+      # ── Binary installation ─────────────────────────────────────────────
+      - install -Dm755 client/target/release/myna-desktop   /app/bin/myna-desktop
+      - install -Dm755 client/target/release/myna-testbed   /app/bin/myna-testbed
+      - install -Dm755 client/target/release/myna-hud       /app/bin/myna-hud
+      - install -Dm755 client/target/release/myna-config    /app/bin/myna-config
+      - install -Dm755 client/target/release/myna-hud-host /app/bin/myna-hud-host
 
       # Strip DWARF debuginfo, keeping symbols for panic backtraces
-      - strip --strip-debug /app/bin/myna-desktop /app/bin/myna-testbed /app/bin/myna-hud /app/bin/myna-config
+      - strip --strip-debug /app/bin/myna-desktop /app/bin/myna-testbed /app/bin/myna-hud /app/bin/myna-config /app/bin/myna-hud-host
 
       # ── GSettings schema ────────────────────────────────────────────────
       - |
@@ -142,6 +156,34 @@ modules:
           msgfmt "$po" -o "/app/share/locale/$lang/LC_MESSAGES/$domain.mo"
         done
 
+      # ── Application icons ───────────────────────────────────────────────
+      - install -Dm644 client/data/icons/hicolor/scalable/apps/com.canonical.Myna.svg
+          /app/share/icons/hicolor/scalable/apps/com.canonical.Myna.svg
+      - install -Dm644 client/data/icons/hicolor/scalable/apps/com.canonical.Myna.Config.svg
+          /app/share/icons/hicolor/scalable/apps/com.canonical.Myna.Config.svg
+
+    sources:
+      # Upstream Myna source
+      - type: git
+        url: https://github.com/canonical/myna.git
+        commit: c1bd11cf487de4bc273c74106ba9bd5bfc82eaf2
+      - type: patch
+        path: patches/0001-flatpak-backend-support.patch
+      - type: patch
+        path: patches/0002-shortcut-desktop-steps.patch
+      - type: patch
+        path: patches/0003-flatpak-ibus-pid-check.patch
+
+      # Vendored Cargo crates (517 crates, checksum-verified)
+      - cargo-sources.json
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Desktop Integration & Launcher Scripts
+  # Separated from Rust compilation so script/metadata tweaks rebuild instantly.
+  # ─────────────────────────────────────────────────────────────────────────
+  - name: myna-packaging
+    buildsystem: simple
+    build-commands:
       # ── Launcher scripts ────────────────────────────────────────────────
       - install -Dm755 myna-app             /app/bin/myna-app
       - install -Dm755 myna-daemon          /app/bin/myna-daemon
@@ -155,24 +197,11 @@ modules:
       - install -Dm644 com.canonical.Myna.metainfo.xml
           /app/share/metainfo/com.canonical.Myna.metainfo.xml
 
-      # ── Application icons ───────────────────────────────────────────────
-      - install -Dm644 client/data/icons/hicolor/scalable/apps/com.canonical.Myna.svg
-          /app/share/icons/hicolor/scalable/apps/com.canonical.Myna.svg
-      - install -Dm644 client/data/icons/hicolor/scalable/apps/com.canonical.Myna.Config.svg
-          /app/share/icons/hicolor/scalable/apps/com.canonical.Myna.Config.svg
-
       # ── Systemd user service unit ───────────────────────────────────────
       - install -Dm644 com.canonical.Myna.service
           /app/share/systemd/user/com.canonical.Myna.service
 
     sources:
-      # Upstream Myna source
-      - type: git
-        url: https://github.com/canonical/myna.git
-        commit: c1bd11cf487de4bc273c74106ba9bd5bfc82eaf2
-      - type: patch
-        path: patches/0001-flatpak-backend-support.patch
-
       # Packaging helper scripts & integration files
       - type: file
         path: scripts/myna-app
@@ -190,6 +219,3 @@ modules:
         path: com.canonical.Myna.metainfo.xml
       - type: file
         path: services/com.canonical.Myna.service
-
-      # Vendored Cargo crates (517 crates, checksum-verified)
-      - cargo-sources.json
