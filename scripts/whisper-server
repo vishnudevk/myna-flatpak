@@ -19,7 +19,12 @@ mkdir -p "$SHARE_DIR"
 DEVICE="${MYNA_WHISPER_DEVICE:-cpu}"
 
 # Model selection: tiny, base, small, large-v3, large-v3-turbo (default: base)
-MODEL="${MYNA_WHISPER_MODEL:-base}"
+CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/myna/model"
+if [ -f "$CONFIG_FILE" ]; then
+    MODEL="$(cat "$CONFIG_FILE" | tr -d '[:space:]')"
+else
+    MODEL="${MYNA_WHISPER_MODEL:-base}"
+fi
 
 # Resolve model weights directory.
 # In Flatpak, $XDG_DATA_HOME is ~/.var/app/com.canonical.Myna/data

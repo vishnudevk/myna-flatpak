@@ -1,9 +1,9 @@
 diff --git a/client/myna-config/src/adapters/flatpak_backend.rs b/client/myna-config/src/adapters/flatpak_backend.rs
 new file mode 100644
-index 00000000..3f1d6365
+index 00000000..549c2fb7
 --- /dev/null
 +++ b/client/myna-config/src/adapters/flatpak_backend.rs
-@@ -0,0 +1,188 @@
+@@ -0,0 +1,238 @@
 +//! Backend repository and system configurator for Flatpak and standalone environments.
 +//!
 +//! Unlike Ubuntu Snap which uses snapd over a Unix domain socket (/run/snapd.socket)
@@ -88,9 +88,21 @@ index 00000000..3f1d6365
 +        backend: &BackendIdentity,
 +        _cancellation: CancellationToken,
 +    ) -> BackendSnapshot {
-+        let mut snapshot = BackendSnapshot::empty(backend.clone());
-+        let active_model = std::env::var("MYNA_WHISPER_MODEL").unwrap_or_else(|_| "base".to_string());
-+        let active_model_name = format!("whisper-{}", active_model);
++        let backend_with_app = backend.clone().with_modelctl_app("myna-whisper.whisper");
++        let mut snapshot = BackendSnapshot::empty(backend_with_app);
++
++        let config_file = std::env::var("XDG_CONFIG_HOME")
++            .map(PathBuf::from)
++            .unwrap_or_else(|_| PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".config"))
++            .join("myna/model");
++        let active_model = std::fs::read_to_string(&config_file)
++            .map(|s| s.trim().to_string())
++            .ok()
++            .filter(|s| !s.is_empty())
++            .or_else(|| std::env::var("MYNA_WHISPER_MODEL").ok())
++            .unwrap_or_else(|| "base".to_string());
++        let active_model_clean = active_model.trim_start_matches("whisper-");
++        let active_model_name = format!("whisper-{}", active_model_clean);
 +
 +        if let Ok(models) = crate::domain::parse_model_options(&format!(
 +            r#"{{"active-model": "{}", "models": [{{"name": "whisper-tiny"}}, {{"name": "whisper-base"}}, {{"name": "whisper-small"}}, {{"name": "whisper-large-v3"}}, {{"name": "whisper-large-v3-turbo"}}]}}"#,
@@ -150,10 +162,48 @@ index 00000000..3f1d6365
 +
 +    async fn apply_backend_config(
 +        &self,
-+        _preview: &ApplyPreview,
++        preview: &ApplyPreview,
 +        _cancellation: CancellationToken,
 +    ) -> Result<Vec<CommandResult>, SystemConfiguratorFailure> {
-+        Ok(Vec::new())
++        let config_dir = std::env::var("XDG_CONFIG_HOME")
++            .map(PathBuf::from)
++            .unwrap_or_else(|_| PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".config"))
++            .join("myna");
++        let _ = std::fs::create_dir_all(&config_dir);
++
++        for change in preview.changes() {
++            if change.key() == "model" {
++                if let crate::domain::ConfigValue::Text(val) = change.proposed() {
++                    let model_name = val.trim_start_matches("whisper-");
++                    let _ = std::fs::write(config_dir.join("model"), model_name);
++
++                    let data_dir = std::env::var("XDG_DATA_HOME")
++                        .map(PathBuf::from)
++                        .unwrap_or_else(|_| PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".local/share"))
++                        .join("myna/models")
++                        .join(model_name);
++                    if !data_dir.exists() {
++                        let _ = Command::new("/app/bin/myna-download-model")
++                            .arg(model_name)
++                            .status();
++                    }
++
++                    let _ = Command::new("pkill").args(["-f", "myna.server"]).status();
++                    let runtime_dir = std::env::var("XDG_RUNTIME_DIR")
++                        .map(PathBuf::from)
++                        .unwrap_or_else(|_| PathBuf::from("/tmp"));
++                    let _ = std::fs::remove_file(runtime_dir.join("myna/whisper/myna.sock"));
++                    let _ = Command::new("/app/bin/myna-whisper-server").spawn();
++                }
++            }
++        }
++
++        let results = preview
++            .operations()
++            .iter()
++            .map(|op| CommandResult::new(op.executable(), op.arguments().to_vec(), Some(0), "", ""))
++            .collect();
++        Ok(results)
 +    }
 +
 +    async fn changes_in_progress(
