@@ -88,6 +88,20 @@ if [ "$DEVICE" = "cuda" ]; then
     fi
 fi
 
+# Streaming mode: enable streaming by default so live transcription works as you speak
+if [ -f "$FLATPAK_CONFIG_DIR/streaming" ]; then
+    STREAMING="$(cat "$FLATPAK_CONFIG_DIR/streaming" | tr -d '[:space:]')"
+elif [ -f "$CONFIG_DIR/streaming" ]; then
+    STREAMING="$(cat "$CONFIG_DIR/streaming" | tr -d '[:space:]')"
+else
+    STREAMING="${MYNA_WHISPER_STREAMING:-true}"
+fi
+
+STREAM_ARGS=()
+if [ "$STREAMING" = "true" ] || [ "$STREAMING" = "1" ]; then
+    STREAM_ARGS=(--streaming)
+fi
+
 exec python3 -m myna.server \
     --adapter whisper \
     --device "$DEVICE" \
@@ -95,4 +109,5 @@ exec python3 -m myna.server \
     --model "$MODEL_DIR" \
     --socket "$SOCKET" \
     --share-provider \
+    "${STREAM_ARGS[@]}" \
     "$@"

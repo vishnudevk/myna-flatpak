@@ -1,9 +1,9 @@
 diff --git a/client/myna-config/src/adapters/flatpak_backend.rs b/client/myna-config/src/adapters/flatpak_backend.rs
 new file mode 100644
-index 00000000..e5671f1f
+index 00000000..afedd5a7
 --- /dev/null
 +++ b/client/myna-config/src/adapters/flatpak_backend.rs
-@@ -0,0 +1,289 @@
+@@ -0,0 +1,310 @@
 +//! Backend repository and system configurator for Flatpak and standalone environments.
 +//!
 +//! Unlike Ubuntu Snap which uses snapd over a Unix domain socket (/run/snapd.socket)
@@ -148,6 +148,22 @@ index 00000000..e5671f1f
 +            snapshot.set_status(status);
 +        }
 +
++        let streaming_config_file = std::env::var("XDG_CONFIG_HOME")
++            .map(PathBuf::from)
++            .unwrap_or_else(|_| PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".config"))
++            .join("myna/streaming");
++        let active_streaming = std::fs::read_to_string(&streaming_config_file)
++            .map(|s| s.trim().to_lowercase())
++            .unwrap_or_else(|_| "true".to_string());
++        let streaming_bool = active_streaming != "false" && active_streaming != "0";
++
++        if let Ok(config) = crate::domain::parse_modelctl_config(&format!(
++            "streaming: {}\nsleep-idle-seconds: 300\n",
++            streaming_bool
++        )) {
++            snapshot.set_modelctl_config(config);
++        }
++
 +        snapshot
 +    }
 +
@@ -235,6 +251,11 @@ index 00000000..e5671f1f
 +                        }
 +                    }
 +
++                    restart_needed = true;
++                }
++            } else if change.key() == "streaming" {
++                if let crate::domain::ConfigValue::Boolean(val) = change.proposed() {
++                    let _ = std::fs::write(config_dir.join("streaming"), if *val { "true" } else { "false" });
 +                    restart_needed = true;
 +                }
 +            }
