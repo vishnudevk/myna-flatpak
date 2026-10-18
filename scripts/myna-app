@@ -4,11 +4,20 @@
 # then opens the Myna Settings GUI.
 set -eu
 
+# If a subcommand or toggle flag was passed, run it immediately without probing sockets
+if [ "${1:-}" = "--toggle" ] || [ "${1:-}" = "myna-toggle" ]; then
+    shift || true
+    exec /app/bin/myna-toggle "$@"
+elif [ $# -gt 0 ] && [ -x "/app/bin/$1" ]; then
+    cmd="/app/bin/$1"
+    shift
+    exec "$cmd" "$@"
+fi
+
 BACKEND_DIR="${XDG_RUNTIME_DIR}/myna"
 mkdir -p "$BACKEND_DIR/whisper"
 
 WHISPER_SOCKET="${BACKEND_DIR}/whisper/myna.sock"
-DAEMON_SOCKET="${BACKEND_DIR}/myna-desktop.sock"
 
 # Function to test whether a Unix domain socket is active and accepting connections
 is_socket_listening() {
@@ -35,23 +44,15 @@ if ! is_socket_listening "$WHISPER_SOCKET"; then
     fi
 fi
 
-# 2. Start Myna dictation daemon if not running or stale
-if ! is_socket_listening "$DAEMON_SOCKET"; then
+# 2. Start Myna dictation daemon if not already serving on D-Bus
+# (Note: we check D-Bus rather than connecting to myna-desktop.sock, because any socket connection triggers a toggle poke!)
+if ! busctl --user status com.canonical.Myna.Dictation >/dev/null 2>&1; then
     echo "myna-app: starting Myna dictation daemon..." >&2
-    rm -f "$DAEMON_SOCKET"
+    rm -f "${BACKEND_DIR}/myna-desktop.sock"
     if [ -x /app/bin/myna-daemon ]; then
         /app/bin/myna-daemon >> "$BACKEND_DIR/daemon.log" 2>&1 &
     fi
 fi
 
-# 3. If a subcommand or toggle flag was passed, run it; otherwise present Myna Settings UI
-if [ "${1:-}" = "--toggle" ] || [ "${1:-}" = "myna-toggle" ]; then
-    shift || true
-    exec /app/bin/myna-toggle "$@"
-elif [ $# -gt 0 ] && [ -x "/app/bin/$1" ]; then
-    cmd="/app/bin/$1"
-    shift
-    exec "$cmd" "$@"
-fi
-
+# 3. Present Myna Settings UI
 exec /app/bin/myna-config "$@"
