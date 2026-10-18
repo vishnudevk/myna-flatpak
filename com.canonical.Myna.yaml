@@ -66,6 +66,7 @@ modules:
       # Install server launcher and model downloader
       - install -Dm755 whisper-server       /app/bin/myna-whisper-server
       - install -Dm755 myna-download-model  /app/bin/myna-download-model
+      - install -Dm755 myna-download-cuda   /app/bin/myna-download-cuda
 
     sources:
       - type: git
@@ -75,6 +76,8 @@ modules:
         path: scripts/whisper-server
       - type: file
         path: scripts/myna-download-model
+      - type: file
+        path: scripts/myna-download-cuda
 
   # ─────────────────────────────────────────────────────────────────────────
   # Myna Rust client workspace

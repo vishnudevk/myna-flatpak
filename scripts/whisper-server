@@ -63,7 +63,24 @@ fi
 export SNAP_NAME="myna-whisper"
 export SNAP_INSTANCE_NAME="myna-whisper"
 
+CUDA_DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/myna/cuda/lib"
 if [ "$DEVICE" = "cuda" ]; then
+    if [ ! -f "$CUDA_DATA_DIR/libcublas.so.12" ]; then
+        echo "myna-whisper: CUDA cuBLAS library not found in $CUDA_DATA_DIR." >&2
+        echo "myna-whisper: downloading CUDA cuBLAS runtime automatically..." >&2
+        if /app/bin/myna-download-cuda; then
+            echo "myna-whisper: CUDA libraries downloaded successfully." >&2
+        else
+            echo "myna-whisper: failed to download CUDA libraries, falling back to CPU." >&2
+            DEVICE="cpu"
+            COMPUTE_TYPE="default"
+        fi
+    fi
+
+    if [ -d "$CUDA_DATA_DIR" ]; then
+        export LD_LIBRARY_PATH="$CUDA_DATA_DIR${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    fi
+
     CUDA_SITE="$EXTENSIONS_DIR/gpu-nvidia/site-packages"
     if [ -d "$CUDA_SITE" ]; then
         export PYTHONPATH="$CUDA_SITE${PYTHONPATH:+:$PYTHONPATH}"

@@ -1,9 +1,9 @@
 diff --git a/client/myna-config/src/adapters/flatpak_backend.rs b/client/myna-config/src/adapters/flatpak_backend.rs
 new file mode 100644
-index 00000000..94d8db17
+index 00000000..e5671f1f
 --- /dev/null
 +++ b/client/myna-config/src/adapters/flatpak_backend.rs
-@@ -0,0 +1,279 @@
+@@ -0,0 +1,289 @@
 +//! Backend repository and system configurator for Flatpak and standalone environments.
 +//!
 +//! Unlike Ubuntu Snap which uses snapd over a Unix domain socket (/run/snapd.socket)
@@ -224,6 +224,16 @@ index 00000000..94d8db17
 +                        _ => "cpu",
 +                    };
 +                    let _ = std::fs::write(config_dir.join("engine"), engine_name);
++
++                    if engine_name == "nvidia-gpu" {
++                        let cuda_dir = std::env::var("XDG_DATA_HOME")
++                            .map(PathBuf::from)
++                            .unwrap_or_else(|_| PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".local/share"))
++                            .join("myna/cuda/lib");
++                        if !cuda_dir.join("libcublas.so.12").exists() {
++                            let _ = Command::new("/app/bin/myna-download-cuda").status();
++                        }
++                    }
 +
 +                    restart_needed = true;
 +                }
