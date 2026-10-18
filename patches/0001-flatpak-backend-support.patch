@@ -164,3 +164,63 @@ index 00000000..20bc55c7
 +        Err("not applicable in Flatpak".to_string())
 +    }
 +}
+diff --git a/client/myna-config/src/adapters/mod.rs b/client/myna-config/src/adapters/mod.rs
+index 9c2449e5..12c35318 100644
+--- a/client/myna-config/src/adapters/mod.rs
++++ b/client/myna-config/src/adapters/mod.rs
+@@ -1,4 +1,5 @@
+ pub mod client_settings;
++pub mod flatpak_backend;
+ pub mod snap_backend;
+ pub mod snapd_client;
+ pub mod system_configurator;
+diff --git a/client/myna-config/src/app.rs b/client/myna-config/src/app.rs
+index bdbc7a3e..6deae215 100644
+--- a/client/myna-config/src/app.rs
++++ b/client/myna-config/src/app.rs
+@@ -1486,6 +1486,13 @@ fn build_window(application: &adw::Application) {
+     // no window and no held use count quits the moment `activate` returns.
+     let hold = application.hold();
+     glib::spawn_future_local(async move {
++        let is_flatpak = std::env::var_os("FLATPAK_ID").is_some() || !std::path::Path::new("/run/snapd.socket").exists();
++        if is_flatpak {
++            build_settings_window(&application);
++            drop(hold);
++            return;
++        }
++
+         let runner = std::sync::Arc::new(crate::command::GioCommandRunner);
+         let components = crate::onboarding_ui::assess_machine(
+             &crate::adapters::snap_backend::SnapBackendRepository::new(
+diff --git a/client/myna-config/src/backend_ui.rs b/client/myna-config/src/backend_ui.rs
+index e8ea37e8..f6500fb8 100644
+--- a/client/myna-config/src/backend_ui.rs
++++ b/client/myna-config/src/backend_ui.rs
+@@ -540,12 +540,21 @@ impl BackendUi {
+         general_settings: Option<GeneralSettings>,
+         diagnostics_page: adw::NavigationPage,
+     ) -> Rc<Self> {
+-        let repository: Rc<dyn BackendRepository> = Rc::new(SnapBackendRepository::new(
+-            Arc::new(GioCommandRunner),
+-            Arc::new(UnixSocketSnapdClient::new()),
+-        ));
+-        let configurator: Rc<dyn SystemConfigurator> =
+-            Rc::new(PkexecSystemConfigurator::new(Arc::new(GioCommandRunner)));
++        let is_flatpak = std::env::var_os("FLATPAK_ID").is_some() || !std::path::Path::new("/run/snapd.socket").exists();
++        let (repository, configurator): (Rc<dyn BackendRepository>, Rc<dyn SystemConfigurator>) = if is_flatpak {
++            (
++                Rc::new(crate::adapters::flatpak_backend::FlatpakBackendRepository::new()),
++                Rc::new(crate::adapters::flatpak_backend::FlatpakSystemConfigurator::default()),
++            )
++        } else {
++            (
++                Rc::new(SnapBackendRepository::new(
++                    Arc::new(GioCommandRunner),
++                    Arc::new(UnixSocketSnapdClient::new()),
++                )),
++                Rc::new(PkexecSystemConfigurator::new(Arc::new(GioCommandRunner))),
++            )
++        };
+         let ui = Self::install_with_ports(
+             repository,
+             configurator,
