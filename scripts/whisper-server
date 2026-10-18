@@ -15,8 +15,21 @@ SOCKET="${SHARE_DIR}/myna.sock"
 
 mkdir -p "$SHARE_DIR"
 
-# Device selection: cpu (default) or cuda
-DEVICE="${MYNA_WHISPER_DEVICE:-cpu}"
+# Engine and device selection: cpu (default) or nvidia-gpu (cuda)
+ENGINE_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/myna/engine"
+if [ -f "$ENGINE_CONFIG" ]; then
+    ENGINE="$(cat "$ENGINE_CONFIG" | tr -d '[:space:]')"
+else
+    ENGINE="${MYNA_WHISPER_ENGINE:-${MYNA_WHISPER_DEVICE:-cpu}}"
+fi
+
+if [ "$ENGINE" = "nvidia-gpu" ] || [ "$ENGINE" = "cuda" ]; then
+    DEVICE="cuda"
+    COMPUTE_TYPE="${MYNA_WHISPER_COMPUTE_TYPE:-float16}"
+else
+    DEVICE="cpu"
+    COMPUTE_TYPE="${MYNA_WHISPER_COMPUTE_TYPE:-default}"
+fi
 
 # Model selection: tiny, base, small, large-v3, large-v3-turbo (default: base)
 CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/myna/model"
@@ -61,6 +74,7 @@ fi
 exec python3 -m myna.server \
     --adapter whisper \
     --device "$DEVICE" \
+    --compute-type "$COMPUTE_TYPE" \
     --model "$MODEL_DIR" \
     --socket "$SOCKET" \
     --share-provider \

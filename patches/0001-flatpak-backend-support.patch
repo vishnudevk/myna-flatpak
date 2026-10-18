@@ -1,9 +1,9 @@
 diff --git a/client/myna-config/src/adapters/flatpak_backend.rs b/client/myna-config/src/adapters/flatpak_backend.rs
 new file mode 100644
-index 00000000..549c2fb7
+index 00000000..94d8db17
 --- /dev/null
 +++ b/client/myna-config/src/adapters/flatpak_backend.rs
-@@ -0,0 +1,238 @@
+@@ -0,0 +1,279 @@
 +//! Backend repository and system configurator for Flatpak and standalone environments.
 +//!
 +//! Unlike Ubuntu Snap which uses snapd over a Unix domain socket (/run/snapd.socket)
@@ -111,20 +111,40 @@ index 00000000..549c2fb7
 +            snapshot.set_models(models);
 +        }
 +
-+        let active_engine = std::env::var("MYNA_WHISPER_DEVICE")
-+            .map(|d| if d == "cuda" { "gpu-nvidia" } else { "faster-whisper-cpu" })
-+            .unwrap_or("faster-whisper-cpu");
++        let engine_config_file = std::env::var("XDG_CONFIG_HOME")
++            .map(PathBuf::from)
++            .unwrap_or_else(|_| PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".config"))
++            .join("myna/engine");
++        let raw_engine = std::fs::read_to_string(&engine_config_file)
++            .map(|s| s.trim().to_string())
++            .ok()
++            .filter(|s| !s.is_empty())
++            .or_else(|| std::env::var("MYNA_WHISPER_ENGINE").ok())
++            .or_else(|| std::env::var("MYNA_WHISPER_DEVICE").ok())
++            .unwrap_or_else(|| "cpu".to_string());
++        let active_engine = match raw_engine.as_str() {
++            "nvidia-gpu" | "cuda" | "gpu-nvidia" | "faster-whisper-cuda" => "nvidia-gpu",
++            _ => "cpu",
++        };
 +
-+        if let Ok(engines) = crate::domain::parse_engine_options(&format!(
-+            r#"{{"active": "{}", "engines": [{{"name": "faster-whisper-cpu", "compatible": true}}]}}"#,
-+            active_engine
-+        )) {
++        let nvidia_compatible = std::path::Path::new("/dev/nvidiactl").exists()
++            || std::path::Path::new("/dev/nvidia0").exists();
++
++        let engines_json = format!(
++            r#"{{"active-engine": "{}", "engines": [{{"name": "cpu", "compatible": true}}, {{"name": "nvidia-gpu", "compatible": {}}}]}}"#,
++            active_engine,
++            nvidia_compatible
++        );
++
++        if let Ok(engines) = crate::domain::parse_engine_options(&engines_json) {
 +            snapshot.set_engines(engines);
 +        }
 +
-+        if let Ok(status) = crate::domain::parse_status(
-+            r#"{"engine": "faster-whisper-cpu", "services": {"server": "active"}}"#
-+        ) {
++        let status_json = format!(
++            r#"{{"engine": "{}", "services": {{"server": "active"}}}}"#,
++            active_engine
++        );
++        if let Ok(status) = crate::domain::parse_status(&status_json) {
 +            snapshot.set_status(status);
 +        }
 +
@@ -156,7 +176,12 @@ index 00000000..549c2fb7
 +        &self,
 +        _cancellation: CancellationToken,
 +    ) -> Result<(), SystemConfiguratorError> {
-+        ensure_backend_started();
++        let _ = Command::new("pkill").args(["-f", "myna.server"]).status();
++        let runtime_dir = std::env::var("XDG_RUNTIME_DIR")
++            .map(PathBuf::from)
++            .unwrap_or_else(|_| PathBuf::from("/tmp"));
++        let _ = std::fs::remove_file(runtime_dir.join("myna/whisper/myna.sock"));
++        let _ = Command::new("/app/bin/myna-whisper-server").spawn();
 +        Ok(())
 +    }
 +
@@ -170,6 +195,8 @@ index 00000000..549c2fb7
 +            .unwrap_or_else(|_| PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".config"))
 +            .join("myna");
 +        let _ = std::fs::create_dir_all(&config_dir);
++
++        let mut restart_needed = false;
 +
 +        for change in preview.changes() {
 +            if change.key() == "model" {
@@ -188,14 +215,28 @@ index 00000000..549c2fb7
 +                            .status();
 +                    }
 +
-+                    let _ = Command::new("pkill").args(["-f", "myna.server"]).status();
-+                    let runtime_dir = std::env::var("XDG_RUNTIME_DIR")
-+                        .map(PathBuf::from)
-+                        .unwrap_or_else(|_| PathBuf::from("/tmp"));
-+                    let _ = std::fs::remove_file(runtime_dir.join("myna/whisper/myna.sock"));
-+                    let _ = Command::new("/app/bin/myna-whisper-server").spawn();
++                    restart_needed = true;
++                }
++            } else if change.key() == "engine" {
++                if let crate::domain::ConfigValue::Text(val) = change.proposed() {
++                    let engine_name = match val.as_str() {
++                        "nvidia-gpu" | "cuda" => "nvidia-gpu",
++                        _ => "cpu",
++                    };
++                    let _ = std::fs::write(config_dir.join("engine"), engine_name);
++
++                    restart_needed = true;
 +                }
 +            }
++        }
++
++        if restart_needed {
++            let _ = Command::new("pkill").args(["-f", "myna.server"]).status();
++            let runtime_dir = std::env::var("XDG_RUNTIME_DIR")
++                .map(PathBuf::from)
++                .unwrap_or_else(|_| PathBuf::from("/tmp"));
++            let _ = std::fs::remove_file(runtime_dir.join("myna/whisper/myna.sock"));
++            let _ = Command::new("/app/bin/myna-whisper-server").spawn();
 +        }
 +
 +        let results = preview
