@@ -1,9 +1,9 @@
 diff --git a/client/myna-config/src/adapters/flatpak_backend.rs b/client/myna-config/src/adapters/flatpak_backend.rs
 new file mode 100644
-index 00000000..20bc55c7
+index 00000000..3f1d6365
 --- /dev/null
 +++ b/client/myna-config/src/adapters/flatpak_backend.rs
-@@ -0,0 +1,160 @@
+@@ -0,0 +1,188 @@
 +//! Backend repository and system configurator for Flatpak and standalone environments.
 +//!
 +//! Unlike Ubuntu Snap which uses snapd over a Unix domain socket (/run/snapd.socket)
@@ -88,7 +88,35 @@ index 00000000..20bc55c7
 +        backend: &BackendIdentity,
 +        _cancellation: CancellationToken,
 +    ) -> BackendSnapshot {
-+        BackendSnapshot::empty(backend.clone())
++        let mut snapshot = BackendSnapshot::empty(backend.clone());
++        let active_model = std::env::var("MYNA_WHISPER_MODEL").unwrap_or_else(|_| "base".to_string());
++        let active_model_name = format!("whisper-{}", active_model);
++
++        if let Ok(models) = crate::domain::parse_model_options(&format!(
++            r#"{{"active-model": "{}", "models": [{{"name": "whisper-tiny"}}, {{"name": "whisper-base"}}, {{"name": "whisper-small"}}, {{"name": "whisper-large-v3"}}, {{"name": "whisper-large-v3-turbo"}}]}}"#,
++            active_model_name
++        )) {
++            snapshot.set_models(models);
++        }
++
++        let active_engine = std::env::var("MYNA_WHISPER_DEVICE")
++            .map(|d| if d == "cuda" { "gpu-nvidia" } else { "faster-whisper-cpu" })
++            .unwrap_or("faster-whisper-cpu");
++
++        if let Ok(engines) = crate::domain::parse_engine_options(&format!(
++            r#"{{"active": "{}", "engines": [{{"name": "faster-whisper-cpu", "compatible": true}}]}}"#,
++            active_engine
++        )) {
++            snapshot.set_engines(engines);
++        }
++
++        if let Ok(status) = crate::domain::parse_status(
++            r#"{"engine": "faster-whisper-cpu", "services": {"server": "active"}}"#
++        ) {
++            snapshot.set_status(status);
++        }
++
++        snapshot
 +    }
 +
 +    async fn refresh(
