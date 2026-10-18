@@ -15,10 +15,14 @@ SOCKET="${SHARE_DIR}/myna.sock"
 
 mkdir -p "$SHARE_DIR"
 
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/myna"
+FLATPAK_CONFIG_DIR="$HOME/.var/app/com.canonical.Myna/config/myna"
+
 # Engine and device selection: cpu (default) or nvidia-gpu (cuda)
-ENGINE_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/myna/engine"
-if [ -f "$ENGINE_CONFIG" ]; then
-    ENGINE="$(cat "$ENGINE_CONFIG" | tr -d '[:space:]')"
+if [ -f "$FLATPAK_CONFIG_DIR/engine" ]; then
+    ENGINE="$(cat "$FLATPAK_CONFIG_DIR/engine" | tr -d '[:space:]')"
+elif [ -f "$CONFIG_DIR/engine" ]; then
+    ENGINE="$(cat "$CONFIG_DIR/engine" | tr -d '[:space:]')"
 else
     ENGINE="${MYNA_WHISPER_ENGINE:-${MYNA_WHISPER_DEVICE:-cpu}}"
 fi
@@ -32,9 +36,10 @@ else
 fi
 
 # Model selection: tiny, base, small, large-v3, large-v3-turbo (default: base)
-CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/myna/model"
-if [ -f "$CONFIG_FILE" ]; then
-    MODEL="$(cat "$CONFIG_FILE" | tr -d '[:space:]')"
+if [ -f "$FLATPAK_CONFIG_DIR/model" ]; then
+    MODEL="$(cat "$FLATPAK_CONFIG_DIR/model" | tr -d '[:space:]')"
+elif [ -f "$CONFIG_DIR/model" ]; then
+    MODEL="$(cat "$CONFIG_DIR/model" | tr -d '[:space:]')"
 else
     MODEL="${MYNA_WHISPER_MODEL:-base}"
 fi
