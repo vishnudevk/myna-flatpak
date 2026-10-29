@@ -197,6 +197,8 @@ modules:
         path: patches/0004-nvidia-ui-progress.patch
       - type: patch
         path: patches/0005-background-portal.patch
+      - type: patch
+        path: patches/0006-server-process-name.patch
 
       # Vendored Cargo crates (517 crates, checksum-verified)
       - cargo-sources.json

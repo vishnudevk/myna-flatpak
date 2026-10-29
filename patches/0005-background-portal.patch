@@ -115,14 +115,17 @@ index b96bbc26..802de867 100644
 +pub mod background;
  pub mod pump;
 diff --git a/client/myna-desktop/src/dbus/serve.rs b/client/myna-desktop/src/dbus/serve.rs
-index 0bcb7422..b9246455 100644
+index 0bcb7422..7c5dd3b6 100644
 --- a/client/myna-desktop/src/dbus/serve.rs
 +++ b/client/myna-desktop/src/dbus/serve.rs
 @@ -31,2 +31,3 @@ use zbus::Connection;
  use crate::dbus::{Bus, PropertyValue, BUS_NAME, OBJECT_PATH};
 +use crate::dbus::background;
  use crate::indicator::dbus::wire_state;
-@@ -436,2 +437,3 @@ impl ZbusBus {
+@@ -436,2 +437,6 @@ impl ZbusBus {
                  myna_core::info_log!("dbus", "acquired {BUS_NAME}");
-+                background::announce(&conn).await;
++                let background_conn = conn.clone();
++                tokio::spawn(async move {
++                    background::announce(&background_conn).await;
++                });
                  let bus = Self {

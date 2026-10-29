@@ -24,6 +24,9 @@ echo "==> Downloading the tiny Whisper model"
 flatpak run --command=myna-download-model com.canonical.Myna tiny
 
 echo "==> Starting PipeWire and WirePlumber"
+echo "==> Starting D-Bus session"
+DBUS_SESSION_BUS_ADDRESS="$(dbus-daemon --session --fork --print-address=1)"
+export DBUS_SESSION_BUS_ADDRESS
 pipewire >/tmp/pipewire.log 2>&1 &
 wireplumber >/tmp/wireplumber.log 2>&1 &
 sleep 2
@@ -68,9 +71,10 @@ done
 
 cat "$STATUS_LOG"
 grep -q 'whisper-tiny' "$STATUS_LOG"
+cat /tmp/myna-daemon.log
 grep -q 'daemon ready' /tmp/myna-daemon.log
 
-DAEMON_ARGS="$(ps -eo args | grep '[p]ython3 -m myna.server' | head -n 1)"
+DAEMON_ARGS="$(ps -eo args | grep '[m]yna-server' | head -n 1)"
 echo "==> Whisper daemon arguments: $DAEMON_ARGS"
 grep -q -- '--sleep-idle-seconds 300' <<<"$DAEMON_ARGS"
 grep -q -- '--idle-action unload' <<<"$DAEMON_ARGS"

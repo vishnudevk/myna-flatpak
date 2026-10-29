@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # whisper-server (Flatpak): launch myna-server with the Whisper adapter.
 #
 # Socket & discovery layout:
@@ -96,7 +96,7 @@ if [ "$DEVICE" = "cuda" ]; then
     fi
 fi
 
-exec python3 -m myna.server \
+exec -a myna-server python3 -m myna.server \
     --adapter whisper \
     --device "$DEVICE" \
     --compute-type "$COMPUTE_TYPE" \
