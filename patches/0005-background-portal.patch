@@ -1,9 +1,9 @@
 diff --git a/client/myna-desktop/src/dbus/background.rs b/client/myna-desktop/src/dbus/background.rs
 new file mode 100644
-index 00000000..afb05233
+index 00000000..58b0358b
 --- /dev/null
 +++ b/client/myna-desktop/src/dbus/background.rs
-@@ -0,0 +1,102 @@
+@@ -0,0 +1,108 @@
 +//! Background-portal registration for the daemon.
 +//!
 +//! GNOME's background-apps list is identity-based, not process-based. A
@@ -102,8 +102,14 @@ index 00000000..afb05233
 +
 +    let mut status = HashMap::new();
 +    status.insert("message", Value::from("Dictation ready"));
-+    if let Err(e) = proxy.set_status(status).await {
-+        myna_core::info_log!("dbus", "background status failed: {e}");
++
++    let mut refresh = tokio::time::interval(std::time::Duration::from_secs(30));
++    refresh.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
++    loop {
++        if let Err(e) = proxy.set_status(status.clone()).await {
++            myna_core::info_log!("dbus", "background status refresh failed: {e}");
++        }
++        refresh.tick().await;
 +    }
 +}
 diff --git a/client/myna-desktop/src/dbus/mod.rs b/client/myna-desktop/src/dbus/mod.rs

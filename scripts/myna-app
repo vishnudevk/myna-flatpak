@@ -15,37 +15,10 @@ elif [ $# -gt 0 ] && [ -x "/app/bin/$1" ]; then
 fi
 
 BACKEND_DIR="${XDG_RUNTIME_DIR}/myna"
-mkdir -p "$BACKEND_DIR/whisper"
+mkdir -p "$BACKEND_DIR"
 
-WHISPER_SOCKET="${BACKEND_DIR}/whisper/myna.sock"
-
-# Function to test whether a Unix domain socket is active and accepting connections
-is_socket_listening() {
-    target="$1"
-    [ -S "$target" ] || return 1
-    python3 -c "
-import socket, sys
-s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-try:
-    s.connect('$target')
-    s.close()
-    sys.exit(0)
-except Exception:
-    sys.exit(1)
-" 2>/dev/null
-}
-
-# 1. Start Whisper STT server if not running or stale
-if ! is_socket_listening "$WHISPER_SOCKET"; then
-    echo "myna-app: starting Whisper speech-to-text backend..." >&2
-    rm -f "$WHISPER_SOCKET"
-    if [ -x /app/bin/myna-whisper-server ]; then
-        /app/bin/myna-whisper-server >> "$BACKEND_DIR/whisper/server.log" 2>&1 &
-    fi
-fi
-
-# 2. Start Myna dictation daemon if not already serving on D-Bus
-# (Note: we check D-Bus rather than connecting to myna-desktop.sock, because any socket connection triggers a toggle poke!)
+# The daemon owns backend startup. Starting it here as well races with
+# myna-daemon and can leave two GPU-resident Whisper servers behind.
 if ! busctl --user status com.canonical.Myna.Dictation >/dev/null 2>&1; then
     echo "myna-app: starting Myna dictation daemon..." >&2
     rm -f "${BACKEND_DIR}/myna-desktop.sock"
@@ -54,5 +27,5 @@ if ! busctl --user status com.canonical.Myna.Dictation >/dev/null 2>&1; then
     fi
 fi
 
-# 3. Present Myna Settings UI
+# Present Myna Settings UI
 exec /app/bin/myna-config "$@"
