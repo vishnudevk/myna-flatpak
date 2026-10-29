@@ -1,5 +1,6 @@
 # Flatpak build artefacts
 .flatpak-builder/
+.cache/
 build/
 build-dir/
 build-whisper/

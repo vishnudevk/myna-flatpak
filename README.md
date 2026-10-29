@@ -88,46 +88,54 @@ systemctl --user enable --now com.canonical.Myna.service
 
 ---
 
-## Building
+## Building in a container
 
-### Prerequisites
+All builds and tests run inside a Podman container. The container installs
+Flatpak tooling and runtimes inside the image; **nothing is installed on the
+host operating system**.
 
-```sh
-flatpak install flathub org.gnome.Platform//50 org.gnome.Sdk//50
-flatpak install flathub org.freedesktop.Sdk.Extension.rust-stable//25.08
-flatpak install flathub org.freedesktop.Sdk.Extension.llvm20//25.08
-```
+The build environment is defined in [Containerfile](Containerfile).
 
-### Build and export the client
+### Build
 
 ```sh
-flatpak-builder --disable-rofiles-fuse --repo=repo --force-clean build-dir com.canonical.Myna.yaml
+scripts/container-build.sh
 ```
 
-### Install locally from repo
+For a clean build:
 
 ```sh
-flatpak --user remote-add --if-not-exists --no-gpg-verify myna-local-repo repo
-flatpak --user install -y --reinstall myna-local-repo com.canonical.Myna
+scripts/container-build.sh --clean
 ```
 
-### Run and test
+Build output is written to `repo/`.
+
+### Test
 
 ```sh
-# Launch Myna Settings GUI:
-flatpak run com.canonical.Myna
-
-# Check status of dictation, settings, and connected backends:
-flatpak run --command=myna-status com.canonical.Myna
-
-# Start the background dictation daemon:
-flatpak run --command=myna-daemon com.canonical.Myna
-
-# Toggle dictation via hotkey / CLI:
-flatpak run --command=myna-toggle com.canonical.Myna
+scripts/container-test.sh
 ```
+
+### Interactive shell
+
+```sh
+scripts/container-shell.sh
+```
+
+### Existing wrapper
+
+`scripts/build-flatpak.sh` is kept as a compatibility entry point and now
+delegates to `scripts/container-build.sh`.
 
 ---
+
+## Agent policy
+
+Agent instructions are in [AGENTS.md](AGENTS.md). In short:
+
+- **All development, build, and test commands must run inside Podman containers.**
+- **Do not install packages, runtimes, SDKs, or build tools on the host OS.**
+- **Do not run `flatpak-builder`, `flatpak install`, `apt`, `dnf`, `pip`, or `cargo` directly on the host.**
 
 ---
 
@@ -140,6 +148,7 @@ flatpak run --command=myna-toggle com.canonical.Myna
   - Bundles the offline Whisper Speech-to-Text inference server (`faster-whisper` CTranslate2 Python runtime).
 - **Build Performance & Caching:**
   - Fast developer build script (`scripts/build-flatpak.sh`) with incremental caching.
+  - Container-only development through Podman using `Containerfile` and `scripts/container-*`.
   - Unified single-pass workspace cargo compilation with `lld` linker and parallel release profile optimizations (cold build ~1m 47s, cached rebuild ~24s).
   - Split manifest into `myna` (Rust compilation) and `myna-packaging` (launcher scripts & desktop integration) for instant packaging tweaks.
 - **Flatpak Integration Patches (`patches/`):**
