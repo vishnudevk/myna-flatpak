@@ -4,16 +4,6 @@
 # then opens the Myna Settings GUI.
 set -eu
 
-cleanup() {
-    for pid in $(jobs -p); do
-        kill "$pid" 2>/dev/null || true
-    done
-    wait 2>/dev/null || true
-}
-trap cleanup EXIT
-trap 'exit 130' INT
-trap 'exit 143' TERM
-
 # If a subcommand or toggle flag was passed, run it immediately without probing sockets
 if [ "${1:-}" = "--toggle" ] || [ "${1:-}" = "myna-toggle" ]; then
     shift || true
@@ -65,4 +55,4 @@ if ! busctl --user status com.canonical.Myna.Dictation >/dev/null 2>&1; then
 fi
 
 # 3. Present Myna Settings UI
-/app/bin/myna-config "$@"
+exec /app/bin/myna-config "$@"
