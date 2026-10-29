@@ -195,6 +195,8 @@ modules:
         path: patches/0003-flatpak-ibus-pid-check.patch
       - type: patch
         path: patches/0004-nvidia-ui-progress.patch
+      - type: patch
+        path: patches/0005-background-portal.patch
 
       # Vendored Cargo crates (517 crates, checksum-verified)
       - cargo-sources.json

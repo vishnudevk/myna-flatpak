@@ -1,0 +1,73 @@
+diff --git a/client/myna-desktop/src/dbus/background.rs b/client/myna-desktop/src/dbus/background.rs
+new file mode 100644
+index 00000000..7e3daf6c
+--- /dev/null
++++ b/client/myna-desktop/src/dbus/background.rs
+@@ -0,0 +1,53 @@
++//! Background-portal registration for the daemon.
++//!
++//! GNOME's background-apps list is identity-based, not process-based. A
++//! daemon with no GTK application ID still needs to tell the portal that it
++//! is running in the background and what its user-visible status is.
++
++use std::collections::HashMap;
++
++use zbus::Connection;
++use zbus::zvariant::Value;
++
++#[zbus::proxy(
++    interface = "org.freedesktop.portal.Background",
++    default_service = "org.freedesktop.portal.Desktop",
++    default_path = "/org/freedesktop/portal/desktop"
++)]
++trait BackgroundPortal {
++    fn request_background(
++        &self,
++        parent_window: &str,
++        options: HashMap<&str, Value<'_>>,
++    ) -> zbus::Result<zbus::zvariant::OwnedObjectPath>;
++
++    fn set_status(&self, options: HashMap<&str, Value<'_>>) -> zbus::Result<()>;
++}
++
++pub async fn announce(conn: &Connection) {
++    let proxy = match BackgroundPortalProxy::new(conn).await {
++        Ok(proxy) => proxy,
++        Err(e) => {
++            myna_core::info_log!("dbus", "background portal unavailable: {e}");
++            return;
++        }
++    };
++
++    let mut request = HashMap::new();
++    request.insert("reason", Value::from("Run Myna dictation in the background"));
++    request.insert("autostart", Value::from(false));
++    match proxy.request_background("", request).await {
++        Ok(handle) => {
++            myna_core::info_log!("dbus", "background request opened at {handle}");
++        }
++        Err(e) => {
++            myna_core::info_log!("dbus", "background request failed: {e}");
++        }
++    }
++
++    let mut status = HashMap::new();
++    status.insert("message", Value::from("Dictation ready"));
++    if let Err(e) = proxy.set_status(status).await {
++        myna_core::info_log!("dbus", "background status failed: {e}");
++    }
++}
+diff --git a/client/myna-desktop/src/dbus/mod.rs b/client/myna-desktop/src/dbus/mod.rs
+index b96bbc26..be2738c6 100644
+--- a/client/myna-desktop/src/dbus/mod.rs
++++ b/client/myna-desktop/src/dbus/mod.rs
+@@ -12,0 +13 @@
++pub mod background;
+diff --git a/client/myna-desktop/src/dbus/serve.rs b/client/myna-desktop/src/dbus/serve.rs
+index 0bcb7422..b9246455 100644
+--- a/client/myna-desktop/src/dbus/serve.rs
++++ b/client/myna-desktop/src/dbus/serve.rs
+@@ -31,0 +32 @@ use crate::dbus::{Bus, PropertyValue, BUS_NAME, OBJECT_PATH};
++use crate::dbus::background;
+@@ -436,0 +438 @@ impl ZbusBus {
++                background::announce(&conn).await;
