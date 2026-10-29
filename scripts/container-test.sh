@@ -42,12 +42,16 @@ podman run \
     --network=host \
     --userns=keep-id \
     --env XDG_CACHE_HOME=/tmp \
+    --env XDG_STATE_HOME=/tmp \
+    --env GIT_PAGER=cat \
+    --env LESSHISTFILE=- \
     --volume "$PROJECT_ROOT":/work:Z \
     --workdir /work \
     "$IMAGE" \
     bash -ceu '
         flatpak-builder --version
         bash -n scripts/*.sh
+        python3 -c "import glob, sys, yaml; [yaml.safe_load(open(path)) for path in glob.glob(sys.argv[1])]" ".github/workflows/*.yml"
         python3 -m compileall -q tools
         git diff --check
     '

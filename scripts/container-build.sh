@@ -48,6 +48,9 @@ if [[ "$CLEAN" -eq 1 ]]; then
         --network=host \
         --userns=keep-id \
         --env XDG_CACHE_HOME=/tmp \
+        --env XDG_STATE_HOME=/tmp \
+        --env GIT_PAGER=cat \
+        --env LESSHISTFILE=- \
         --volume "$PROJECT_ROOT":/work:Z \
         --workdir /work \
         "$IMAGE" \
@@ -61,6 +64,9 @@ podman run \
     --network=host \
     --userns=keep-id \
     --env XDG_CACHE_HOME=/tmp \
+    --env XDG_STATE_HOME=/tmp \
+    --env GIT_PAGER=cat \
+    --env LESSHISTFILE=- \
     --volume "$PROJECT_ROOT":/work:Z \
     --workdir /work \
     "$IMAGE" \

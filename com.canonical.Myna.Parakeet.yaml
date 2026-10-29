@@ -42,7 +42,7 @@ modules:
     sources:
       - type: git
         url: https://github.com/canonical/myna.git
-        branch: main
+        commit: f9ddecc8888815e3a732b7b40071e552bab02bab
         dest: .
       - type: dir
         path: .

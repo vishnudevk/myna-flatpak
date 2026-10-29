@@ -14,6 +14,10 @@ RUN dnf -y --setopt=install_weak_deps=False --nodocs install \
         python3-pip \
         python3-PyYAML \
         python3-requests \
+        python3-aiohttp \
+        python3-tomlkit \
+        python3-requirements-parser \
+        python3-packaging \
         bash \
         findutils \
         glibc-langpack-en \

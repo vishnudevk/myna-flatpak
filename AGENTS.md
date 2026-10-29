@@ -11,6 +11,7 @@ This repository ports Myna from Ubuntu/Snap to Flatpak.
    - `scripts/container-build.sh` — build the Flatpak bundle/repo.
    - `scripts/container-test.sh` — run repository checks inside the builder image.
    - `scripts/container-shell.sh` — open an interactive shell in the builder image.
+   - `scripts/container-bundle.sh` — create an installable `.flatpak` artifact.
 5. The build environment is defined in `Containerfile`; update it there when dependencies change.
 6. If a task appears to require a host package or host Flatpak runtime, stop and solve it inside the container image instead.
 7. Treat any proposed command that would mutate the host OS as invalid unless the user explicitly overrides this policy.
@@ -27,6 +28,13 @@ This repository ports Myna from Ubuntu/Snap to Flatpak.
 - Static and integration tests must be launched with `scripts/container-test.sh` or another Podman-based wrapper.
 - Do not add test instructions that require host-native dependencies.
 - Keep the repository self-contained enough that a fresh clone can be built with Podman alone.
+
+## GitHub Actions
+
+- GitHub Actions workflows must invoke the `scripts/container-*.sh` entry points.
+- Do not install Podman, Flatpak, compilers, or SDKs on the GitHub Actions runner.
+- CI may verify that Podman is already available, but must not mutate the runner with package managers.
+- Build artifacts must be produced by `scripts/container-bundle.sh` or another Podman-based command.
 
 ## Repository hygiene
 

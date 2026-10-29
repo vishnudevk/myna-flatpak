@@ -29,7 +29,7 @@
   </developer>
   <content_rating type="oars-1.1" />
   <releases>
-    <release version="0.2.3" date="2026-03-01">
+    <release version="0.3.0+git12.f9ddecc8" date="2026-10-29">
       <description>
         <p>Initial Flatpak packaging of Myna.</p>
       </description>

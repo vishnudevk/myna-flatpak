@@ -71,13 +71,30 @@ modules:
     sources:
       - type: git
         url: https://github.com/canonical/myna.git
-        commit: c1bd11cf487de4bc273c74106ba9bd5bfc82eaf2
+        commit: f9ddecc8888815e3a732b7b40071e552bab02bab
       - type: file
         path: scripts/whisper-server
       - type: file
         path: scripts/myna-download-model
       - type: file
         path: scripts/myna-download-cuda
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # GTK4 layer-shell support used by the updated Myna HUD
+  # ─────────────────────────────────────────────────────────────────────────
+  - name: gtk4-layer-shell
+    buildsystem: meson
+    config-opts:
+      - -Dexamples=false
+      - -Ddocs=false
+      - -Dtests=false
+      - -Dsmoke-tests=false
+      - -Dintrospection=false
+      - -Dvapi=false
+    sources:
+      - type: archive
+        url: https://github.com/wmww/gtk4-layer-shell/archive/refs/tags/v1.3.0.tar.gz
+        sha256: 1ebb01ab14e98afd1727f68f64981c37bd23305b1f131f5667c02b94cf593192
 
   # ─────────────────────────────────────────────────────────────────────────
   # Myna Rust client workspace
@@ -127,7 +144,7 @@ modules:
 
       # ── Version staging ─────────────────────────────────────────────────
       # Avoid depending on git rev-parse during sandbox build
-      - echo "0.2.3" > client/.version
+      - echo "0.3.0+git12.f9ddecc8" > client/.version
 
       # ── Unified Workspace Cargo build (offline, parallel, shared target) 
       - cargo build --release --locked --manifest-path client/Cargo.toml -p myna-desktop -p myna-cli -p myna-hud -p myna-config
@@ -169,7 +186,7 @@ modules:
       # Upstream Myna source
       - type: git
         url: https://github.com/canonical/myna.git
-        commit: c1bd11cf487de4bc273c74106ba9bd5bfc82eaf2
+        commit: f9ddecc8888815e3a732b7b40071e552bab02bab
       - type: patch
         path: patches/0001-flatpak-backend-support.patch
       - type: patch

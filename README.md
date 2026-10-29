@@ -122,6 +122,21 @@ scripts/container-test.sh
 scripts/container-shell.sh
 ```
 
+### Create an installable bundle
+
+```sh
+scripts/container-bundle.sh
+```
+
+The bundle is written to `dist/com.canonical.Myna.flatpak`.
+
+### GitHub Actions
+
+GitHub Actions builds and tests every pull request and `main` push using the
+same Podman entry points. The workflow is defined in
+[.github/workflows/build.yml](.github/workflows/build.yml) and uploads
+`dist/com.canonical.Myna.flatpak` as a build artifact.
+
 ### Existing wrapper
 
 `scripts/build-flatpak.sh` is kept as a compatibility entry point and now
