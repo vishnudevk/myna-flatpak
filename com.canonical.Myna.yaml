@@ -193,6 +193,8 @@ modules:
         path: patches/0002-shortcut-desktop-steps.patch
       - type: patch
         path: patches/0003-flatpak-ibus-pid-check.patch
+      - type: patch
+        path: patches/0004-nvidia-ui-progress.patch
 
       # Vendored Cargo crates (517 crates, checksum-verified)
       - cargo-sources.json

@@ -3,7 +3,7 @@ new file mode 100644
 index 00000000..e5671f1f
 --- /dev/null
 +++ b/client/myna-config/src/adapters/flatpak_backend.rs
-@@ -0,0 +1,289 @@
+@@ -0,0 +1,340 @@
 +//! Backend repository and system configurator for Flatpak and standalone environments.
 +//!
 +//! Unlike Ubuntu Snap which uses snapd over a Unix domain socket (/run/snapd.socket)
@@ -52,6 +52,81 @@ index 00000000..e5671f1f
 +            let _ = Command::new("/app/bin/myna-whisper-server").spawn();
 +        }
 +    }
++}
++
++fn flatpak_apply_blocking(
++    changes: Vec<(String, String)>,
++    operations: Vec<(String, Vec<String>)>,
++) -> Vec<CommandResult> {
++    let config_dir = std::env::var("XDG_CONFIG_HOME")
++        .map(PathBuf::from)
++        .unwrap_or_else(|_| {
++            PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".config")
++        })
++        .join("myna");
++    let _ = std::fs::create_dir_all(&config_dir);
++
++    let mut restart_needed = false;
++
++    for (key, value) in changes {
++        if key == "model" {
++            let model_name = value.trim_start_matches("whisper-");
++            let _ = std::fs::write(config_dir.join("model"), model_name);
++
++            let data_dir = std::env::var("XDG_DATA_HOME")
++                .map(PathBuf::from)
++                .unwrap_or_else(|_| {
++                    PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".local/share")
++                })
++                .join("myna/models")
++                .join(model_name);
++            if !data_dir.exists() {
++                let _ = Command::new("/app/bin/myna-download-model")
++                    .arg(model_name)
++                    .status();
++            }
++
++            restart_needed = true;
++        } else if key == "engine" {
++            let engine_name = if value == "nvidia-gpu" || value == "cuda" {
++                "nvidia-gpu"
++            } else {
++                "cpu"
++            };
++            let _ = std::fs::write(config_dir.join("engine"), engine_name);
++
++            if engine_name == "nvidia-gpu" {
++                let cuda_dir = std::env::var("XDG_DATA_HOME")
++                    .map(PathBuf::from)
++                    .unwrap_or_else(|_| {
++                        PathBuf::from(std::env::var("HOME").unwrap_or_default())
++                            .join(".local/share")
++                    })
++                    .join("myna/cuda/lib");
++                if !cuda_dir.join("libcublas.so.12").exists() {
++                    let _ = Command::new("/app/bin/myna-download-cuda").status();
++                }
++            }
++
++            restart_needed = true;
++        }
++    }
++
++    if restart_needed {
++        let _ = Command::new("pkill").args(["-f", "myna.server"]).status();
++        let runtime_dir = std::env::var("XDG_RUNTIME_DIR")
++            .map(PathBuf::from)
++            .unwrap_or_else(|_| PathBuf::from("/tmp"));
++        let _ = std::fs::remove_file(runtime_dir.join("myna/whisper/myna.sock"));
++        let _ = Command::new("/app/bin/myna-whisper-server").spawn();
++    }
++
++    operations
++        .into_iter()
++        .map(|(executable, arguments)| {
++            CommandResult::new(executable, arguments, Some(0), "", "")
++        })
++        .collect()
 +}
 +
 +#[async_trait(?Send)]
@@ -190,71 +265,47 @@ index 00000000..e5671f1f
 +        preview: &ApplyPreview,
 +        _cancellation: CancellationToken,
 +    ) -> Result<Vec<CommandResult>, SystemConfiguratorFailure> {
-+        let config_dir = std::env::var("XDG_CONFIG_HOME")
-+            .map(PathBuf::from)
-+            .unwrap_or_else(|_| PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".config"))
-+            .join("myna");
-+        let _ = std::fs::create_dir_all(&config_dir);
-+
-+        let mut restart_needed = false;
-+
-+        for change in preview.changes() {
-+            if change.key() == "model" {
-+                if let crate::domain::ConfigValue::Text(val) = change.proposed() {
-+                    let model_name = val.trim_start_matches("whisper-");
-+                    let _ = std::fs::write(config_dir.join("model"), model_name);
-+
-+                    let data_dir = std::env::var("XDG_DATA_HOME")
-+                        .map(PathBuf::from)
-+                        .unwrap_or_else(|_| PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".local/share"))
-+                        .join("myna/models")
-+                        .join(model_name);
-+                    if !data_dir.exists() {
-+                        let _ = Command::new("/app/bin/myna-download-model")
-+                            .arg(model_name)
-+                            .status();
-+                    }
-+
-+                    restart_needed = true;
++        let changes: Vec<(String, String)> = preview
++            .changes()
++            .iter()
++            .filter_map(|change| {
++                if let crate::domain::ConfigValue::Text(value) = change.proposed() {
++                    Some((change.key().to_owned(), value.clone()))
++                } else {
++                    None
 +                }
-+            } else if change.key() == "engine" {
-+                if let crate::domain::ConfigValue::Text(val) = change.proposed() {
-+                    let engine_name = match val.as_str() {
-+                        "nvidia-gpu" | "cuda" => "nvidia-gpu",
-+                        _ => "cpu",
-+                    };
-+                    let _ = std::fs::write(config_dir.join("engine"), engine_name);
++            })
++            .collect();
 +
-+                    if engine_name == "nvidia-gpu" {
-+                        let cuda_dir = std::env::var("XDG_DATA_HOME")
-+                            .map(PathBuf::from)
-+                            .unwrap_or_else(|_| PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".local/share"))
-+                            .join("myna/cuda/lib");
-+                        if !cuda_dir.join("libcublas.so.12").exists() {
-+                            let _ = Command::new("/app/bin/myna-download-cuda").status();
-+                        }
-+                    }
-+
-+                    restart_needed = true;
-+                }
-+            }
-+        }
-+
-+        if restart_needed {
-+            let _ = Command::new("pkill").args(["-f", "myna.server"]).status();
-+            let runtime_dir = std::env::var("XDG_RUNTIME_DIR")
-+                .map(PathBuf::from)
-+                .unwrap_or_else(|_| PathBuf::from("/tmp"));
-+            let _ = std::fs::remove_file(runtime_dir.join("myna/whisper/myna.sock"));
-+            let _ = Command::new("/app/bin/myna-whisper-server").spawn();
-+        }
-+
-+        let results = preview
++        let operations: Vec<(String, Vec<String>)> = preview
 +            .operations()
 +            .iter()
-+            .map(|op| CommandResult::new(op.executable(), op.arguments().to_vec(), Some(0), "", ""))
++            .map(|operation| {
++                (
++                    operation.executable().to_owned(),
++                    operation.arguments().to_vec(),
++                )
++            })
 +            .collect();
-+        Ok(results)
++
++        let result = gio::spawn_blocking(move || {
++            flatpak_apply_blocking(changes, operations)
++        })
++        .await;
++
++        match result {
++            Ok(results) => Ok(results),
++            Err(error) => Err(SystemConfiguratorFailure::new(
++                Vec::new(),
++                SystemConfiguratorError::execution(
++                    "gio",
++                    Vec::new(),
++                    None,
++                    "",
++                    format!("{error:?}"),
++                ),
++            )),
++        }
 +    }
 +
 +    async fn changes_in_progress(
