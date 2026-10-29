@@ -21,6 +21,27 @@ RUN dnf -y --setopt=install_weak_deps=False --nodocs install \
         bash \
         findutils \
         glibc-langpack-en \
+        cargo \
+        rustc \
+        gcc \
+        clang \
+        clang-libs \
+        gtk4-devel \
+        libadwaita-devel \
+        libepoxy-devel \
+        gtk4-layer-shell-devel \
+        pipewire-devel \
+        alsa-lib-devel \
+        glib2-devel \
+        dbus-devel \
+        dbus-daemon \
+        sway \
+        xorg-x11-server-Xvfb \
+        blueprint-compiler \
+        pipewire \
+        wireplumber \
+        pipewire-utils \
+        espeak-ng \
     && dnf clean all
 
 # Flatpak runtimes and SDK extensions needed by the manifest.

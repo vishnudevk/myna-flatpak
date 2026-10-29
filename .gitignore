@@ -18,6 +18,7 @@ __pycache__/
 *.swp
 .lesshst
 .local/
+.tmp/
 
 # Pre-built Python wheels (large binaries, not committed)
 # See wheels/README.md for how to populate this directory.

@@ -15,8 +15,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  cargo-test:
+    name: Cargo tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Verify Podman
+        run: |
+          command -v podman
+          podman --version
+
+      - name: Run Cargo tests
+        run: scripts/container-cargo-test.sh
+
   build:
     name: Podman Flatpak build
+    needs: cargo-test
     runs-on: ubuntu-24.04
     timeout-minutes: 45
 
@@ -45,3 +63,27 @@ jobs:
           path: dist/com.canonical.Myna.flatpak
           if-no-files-found: error
           retention-days: 14
+
+  integration:
+    name: Flatpak integration tests
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Verify Podman
+        run: |
+          command -v podman
+          podman --version
+
+      - name: Download Flatpak bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: myna-flatpak
+          path: dist
+
+      - name: Run Flatpak integration tests
+        run: scripts/container-integration.sh
