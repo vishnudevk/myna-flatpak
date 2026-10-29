@@ -59,6 +59,14 @@ else
     fi
 fi
 
+# Match the upstream Snap engine defaults: CPU keeps the model for 5 idle
+# minutes, NVIDIA keeps it for 10 because loading onto VRAM is slower.
+if [ "$DEVICE" = "cuda" ]; then
+    SLEEP_IDLE_SECONDS=600
+else
+    SLEEP_IDLE_SECONDS=300
+fi
+
 # Set snap identity so myna-server --share-provider writes provider.env beside the socket
 export SNAP_NAME="myna-whisper"
 export SNAP_INSTANCE_NAME="myna-whisper"
@@ -95,4 +103,6 @@ exec python3 -m myna.server \
     --model "$MODEL_DIR" \
     --socket "$SOCKET" \
     --share-provider \
+    --sleep-idle-seconds "$SLEEP_IDLE_SECONDS" \
+    --idle-action unload \
     "$@"

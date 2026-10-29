@@ -51,6 +51,7 @@ podman run \
     bash -ceu '
         flatpak-builder --version
         bash -n scripts/*.sh
+        bash scripts/test-whisper-server-defaults.sh
         python3 -c "import glob, sys, yaml; [yaml.safe_load(open(path)) for path in glob.glob(sys.argv[1])]" ".github/workflows/*.yml"
         python3 -m compileall -q tools
         git diff --check

@@ -70,6 +70,11 @@ cat "$STATUS_LOG"
 grep -q 'whisper-tiny' "$STATUS_LOG"
 grep -q 'daemon ready' /tmp/myna-daemon.log
 
+DAEMON_ARGS="$(ps -eo args | grep '[p]ython3 -m myna.server' | head -n 1)"
+echo "==> Whisper daemon arguments: $DAEMON_ARGS"
+grep -q -- '--sleep-idle-seconds 300' <<<"$DAEMON_ARGS"
+grep -q -- '--idle-action unload' <<<"$DAEMON_ARGS"
+
 echo "==> Transcribing virtual microphone audio"
 pw-cat --playback --target myna-test-feed "$TEST_WAV" \
     >/tmp/myna-playback.log 2>&1 &
